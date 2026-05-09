@@ -328,7 +328,7 @@ export default function Portal() {
               <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#C8813A' }}>{currentMember?.tier || 'Member'}</span>
             </div>
           </div>
-          <nav style={{ flex: 1, padding: '20px 0' }}>
+          <nav style={{ flex: 1, padding: '20px 0', overflowY: 'auto' }}>
             {isAdmin && (
               <>
                 <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(245,240,232,0.2)', padding: '16px 28px 8px' }}>Admin</div>
