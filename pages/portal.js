@@ -361,7 +361,7 @@ export default function Portal() {
             </div>
           </div>
 
-          <div style={{ padding: 48, flex: 1, overflowY: 'auto', maxHeight: 'calc(100vh - 69px)' }}>
+          <div style={{ padding: 48, flex: 1, overflowY: 'auto', minHeight: 'calc(100vh - 69px)' }}>
 
             {activePage === 'home' && (
               <div>
