@@ -33,7 +33,9 @@ export default function Portal() {
   const [messages, setMessages] = useState([])
   const [requests, setRequests] = useState([])
   const [communityMembers, setCommunityMembers] = useState([])
-  const [activeMessage, setActiveMessage] = useState(null)
+  const [activeThread, setActiveThread] = useState(null)
+  const [threadMessages, setThreadMessages] = useState([])
+  const [replyBody, setReplyBody] = useState('')
   const [uploadDesc, setUploadDesc] = useState('')
   const [uploadNotes, setUploadNotes] = useState('')
   const [uploadStatus, setUploadStatus] = useState('')
@@ -109,7 +111,7 @@ export default function Portal() {
     const [dels, opps, msgs, reqs, community] = await Promise.all([
       supabase.from('deliverables').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
       supabase.from('opportunities').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
-      supabase.from('messages').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
+      supabase.from('messages').select('*').eq('member_id', memberId).order('created_at', { ascending: true }),
       supabase.from('file_requests').select('*').eq('member_id', memberId).eq('status', 'pending').order('created_at', { ascending: false }),
       supabase.from('members').select('name, brand, building_short').order('created_at'),
     ])
@@ -126,7 +128,7 @@ export default function Portal() {
     const [dels, opps, msgs, reqs] = await Promise.all([
       supabase.from('deliverables').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
       supabase.from('opportunities').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
-      supabase.from('messages').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
+      supabase.from('messages').select('*').eq('member_id', memberId).order('created_at', { ascending: true }),
       supabase.from('file_requests').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
     ])
     if (dels.data) setAdminDeliverables(dels.data)
@@ -139,6 +141,28 @@ export default function Portal() {
     setCurrentMember(member)
     await loadMemberData(member.id)
     await loadAdminData(member.id)
+  }
+
+  async function sendReply(memberId, body, isAdmin) {
+    if (!body.trim()) return
+    const senderName = isAdmin ? 'Charlie Mulan · Agency' : currentMember?.name
+    const senderInitial = isAdmin ? 'CM' : (currentMember?.name?.[0] || '?')
+    const now = new Date()
+    const timeDisplay = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    await supabase.from('messages').insert({
+      member_id: memberId,
+      sender_name: senderName,
+      sender_initial: senderInitial,
+      body: body.trim(),
+      time_display: timeDisplay,
+      is_reply: !isAdmin
+    })
+    setReplyBody('')
+    if (isAdmin) {
+      await loadAdminData(memberId)
+    } else {
+      await loadMemberData(memberId)
+    }
   }
 
   async function saveMemberInfo() {
@@ -177,7 +201,16 @@ export default function Portal() {
   }
 
   async function addMessage() {
-    const { error } = await supabase.from('messages').insert({ ...newMsg, member_id: currentMember.id })
+    const now = new Date()
+    const timeDisplay = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const { error } = await supabase.from('messages').insert({
+      ...newMsg,
+      member_id: currentMember.id,
+      sender_name: newMsg.sender_name || 'Charlie Mulan · Agency',
+      sender_initial: newMsg.sender_initial || 'CM',
+      time_display: newMsg.time_display || timeDisplay,
+      is_reply: false
+    })
     if (error) showSaveStatus('msg', error.message, 'error')
     else {
       showSaveStatus('msg', 'Added.', 'success')
@@ -271,12 +304,53 @@ export default function Portal() {
   function getInitial(name) { return name ? name[0].toUpperCase() : '?' }
   const firstName = currentMember?.name?.split(' ')[0] || 'there'
   const newDelCount = deliverables.filter(d => d.is_new).length
+  const unreadMessages = messages.filter(m => !m.is_reply).length
 
   function StatusMsg({ id }) {
     if (!saveStatus[id]) return null
     return (
       <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, padding: '10px 14px', marginTop: 12, background: saveStatus[id].type === 'success' ? 'rgba(123,174,127,0.1)' : 'rgba(192,57,43,0.1)', color: saveStatus[id].type === 'success' ? '#4a8a4f' : '#C0392B', border: `1px solid ${saveStatus[id].type === 'success' ? 'rgba(123,174,127,0.3)' : 'rgba(192,57,43,0.3)'}` }}>
         {saveStatus[id].msg}
+      </div>
+    )
+  }
+
+  function MessageThread({ msgs, memberId, isAdminView }) {
+    const messagesEndRef = useRef(null)
+    useEffect(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, [msgs])
+
+    return (
+      <div>
+        <div style={{ maxHeight: 400, overflowY: 'auto', border: '1px solid var(--rule)', padding: 20, background: '#faf7f2', marginBottom: 16 }}>
+          {msgs.length === 0 && (
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)', textAlign: 'center', padding: '20px 0' }}>No messages yet. Start the conversation.</div>
+          )}
+          {msgs.map((m, i) => {
+            const isFromAdmin = !m.is_reply
+            return (
+              <div key={m.id} style={{ display: 'flex', gap: 12, marginBottom: 16, flexDirection: isFromAdmin ? 'row' : 'row-reverse' }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: isFromAdmin ? '#C8813A' : '#B5C9C0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Cormorant Garamond, serif', fontSize: 13, fontWeight: 500, color: '#1A1612', flexShrink: 0 }}>{m.sender_initial || '?'}</div>
+                <div style={{ maxWidth: '70%' }}>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.08em', color: 'var(--ink-light)', marginBottom: 4, textAlign: isFromAdmin ? 'left' : 'right' }}>{m.sender_name} · {m.time_display}</div>
+                  <div style={{ background: isFromAdmin ? 'var(--ink)' : 'white', color: isFromAdmin ? '#F5F0E8' : 'var(--ink)', padding: '10px 14px', borderRadius: isFromAdmin ? '2px 12px 12px 12px' : '12px 2px 12px 12px', fontFamily: 'DM Sans, sans-serif', fontSize: 13, lineHeight: 1.5, border: isFromAdmin ? 'none' : '1px solid var(--rule)' }}>{m.body}</div>
+                </div>
+              </div>
+            )
+          })}
+          <div ref={messagesEndRef} />
+        </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <textarea
+            value={replyBody}
+            onChange={e => setReplyBody(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(memberId, replyBody, isAdminView) } }}
+            placeholder={isAdminView ? 'Message to member... (Enter to send)' : 'Reply... (Enter to send)'}
+            style={{ flex: 1, background: 'var(--paper-dark)', border: '1px solid var(--rule)', color: 'var(--ink)', fontFamily: 'DM Sans, sans-serif', fontSize: 13, padding: '10px 14px', outline: 'none', resize: 'none', minHeight: 60 }}
+          />
+          <button onClick={() => sendReply(memberId, replyBody, isAdminView)} style={{ background: '#C8813A', color: '#1A1612', fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500, padding: '10px 16px', border: 'none', cursor: 'pointer', alignSelf: 'flex-end' }}>Send</button>
+        </div>
       </div>
     )
   }
@@ -340,7 +414,7 @@ export default function Portal() {
             <NavItem label="My Deliverables" active={activePage === 'deliverables'} onClick={() => setActivePage('deliverables')} badge={deliverables.length || null} />
             <NavItem label="Opportunities" active={activePage === 'opportunities'} onClick={() => setActivePage('opportunities')} badge={opportunities.length || null} />
             <NavItem label="The Room" active={activePage === 'community'} onClick={() => setActivePage('community')} />
-            <NavItem label="Messages" active={activePage === 'messages'} onClick={() => setActivePage('messages')} badge={messages.length || null} />
+            <NavItem label="Messages" active={activePage === 'messages'} onClick={() => setActivePage('messages')} badge={unreadMessages || null} />
             <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(245,240,232,0.2)', padding: '16px 28px 8px', marginTop: 8 }}>My Work</div>
             <NavItem label="My Profile" active={activePage === 'profile'} onClick={() => setActivePage('profile')} />
             {!isAdmin && <NavItem label="Submit Files" active={activePage === 'submit'} onClick={() => setActivePage('submit')} />}
@@ -375,7 +449,7 @@ export default function Portal() {
                     { label: 'Member Since', value: currentMember?.member_since || '—', sub: 'Season 1 · ' + (currentMember?.tier || 'Member') },
                     { label: 'Sessions Completed', value: currentMember?.sessions_completed || '0', sub: 'Next: ' + (currentMember?.session_short || '—') },
                     { label: 'Deliverables', value: deliverables.length, sub: newDelCount > 0 ? `${newDelCount} new this week` : 'Up to date' },
-                    { label: 'Opportunities', value: opportunities.length, sub: 'Curated this week' }
+                    { label: 'Messages', value: messages.length, sub: unreadMessages > 0 ? `${unreadMessages} from agency` : 'Up to date' }
                   ].map((s, i) => (
                     <div key={i} style={{ background: 'var(--paper)', padding: '24px 28px' }}>
                       <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-light)', marginBottom: 10 }}>{s.label}</div>
@@ -393,7 +467,7 @@ export default function Portal() {
                       </div>
                       <div style={{ padding: 24 }}>
                         {deliverables.slice(0, 3).map(d => <DeliverableRow key={d.id} d={d} />)}
-                        {deliverables.length === 0 && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--ink-light)', padding: '20px 0', textAlign: 'center' }}>No deliverables yet.</div>}
+                        {deliverables.length === 0 && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)', padding: '20px 0', textAlign: 'center' }}>No deliverables yet.</div>}
                       </div>
                     </div>
                     <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
@@ -417,10 +491,15 @@ export default function Portal() {
                     <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
                       <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--rule)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-mid)' }}>Messages</span>
-                        <button style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#C8813A', cursor: 'pointer', border: 'none', background: 'none' }} onClick={() => setActivePage('messages')}>View All</button>
+                        <button style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#C8813A', cursor: 'pointer', border: 'none', background: 'none' }} onClick={() => setActivePage('messages')}>Open Chat</button>
                       </div>
                       <div style={{ padding: 24 }}>
-                        {messages.slice(0, 3).map((m, i) => <MessageRow key={m.id} m={m} i={i} onClick={() => setActiveMessage(m)} />)}
+                        {messages.slice(-3).map((m, i) => (
+                          <div key={m.id} style={{ padding: '10px 0', borderBottom: i < 2 ? '1px solid var(--rule)' : 'none' }}>
+                            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, color: m.is_reply ? '#7BAE7F' : '#C8813A', marginBottom: 4 }}>{m.sender_name}</div>
+                            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 14, color: 'var(--ink)', lineHeight: 1.4 }}>{(m.body || '').substring(0, 60)}{m.body?.length > 60 ? '...' : ''}</div>
+                          </div>
+                        ))}
                         {messages.length === 0 && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)', padding: '20px 0', textAlign: 'center' }}>No messages yet.</div>}
                       </div>
                     </div>
@@ -434,7 +513,7 @@ export default function Portal() {
                 <div style={{ marginBottom: 48 }}>
                   <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 10 }}>Agency Overview</div>
                   <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 42, fontWeight: 300, lineHeight: 1.1, color: 'var(--ink)', marginBottom: 16 }}>Charlie&apos;s <em style={{ fontStyle: 'italic', color: 'var(--ink-mid)' }}>Circle</em></div>
-                  <div style={{ fontSize: 13, color: 'var(--ink-light)', maxWidth: 520, lineHeight: 1.7 }}>Season 1 at a glance. All your active members and quick tools in one place.</div>
+                  <div style={{ fontSize: 13, color: 'var(--ink-light)', maxWidth: 520, lineHeight: 1.7 }}>Season 1 at a glance.</div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                   <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
@@ -457,22 +536,29 @@ export default function Portal() {
                   </div>
                   <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
                     <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--rule)' }}>
-                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-mid)' }}>Quick Actions · {currentMember?.name || '—'}</span>
+                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-mid)' }}>Message · {currentMember?.name || '—'}</span>
                     </div>
                     <div style={{ padding: 24 }}>
-                      {[
-                        { label: 'Add Deliverable', action: () => { setShowAdmin(true); setAdminTab('deliverables'); setShowAddDel(true); loadAdminData(currentMember?.id) } },
-                        { label: 'Add Opportunity', action: () => { setShowAdmin(true); setAdminTab('opportunities'); setShowAddOpp(true); loadAdminData(currentMember?.id) } },
-                        { label: 'Send Message', action: () => { setShowAdmin(true); setAdminTab('messages'); setShowAddMsg(true); loadAdminData(currentMember?.id) } },
-                        { label: 'Request a File', action: () => { setShowAdmin(true); setAdminTab('requests'); setShowAddReq(true); loadAdminData(currentMember?.id) } },
-                        { label: 'Update Member Info', action: () => { setShowAdmin(true); setAdminTab('member'); loadAdminData(currentMember?.id) } }
-                      ].map((a, i) => (
-                        <div key={i} onClick={a.action} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: i < 4 ? '1px solid var(--rule)' : 'none', cursor: 'pointer' }}>
-                          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 15, color: 'var(--ink)' }}>{a.label}</div>
-                          <div style={{ color: '#C8813A', fontSize: 16 }}>→</div>
-                        </div>
-                      ))}
+                      <MessageThread msgs={adminMessages} memberId={currentMember?.id} isAdminView={true} />
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activePage === 'messages' && (
+              <div>
+                <div style={{ marginBottom: 48 }}>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 10 }}>Direct</div>
+                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, fontWeight: 300, color: 'var(--ink)', marginBottom: 16 }}><em style={{ fontStyle: 'italic' }}>Messages</em></div>
+                  <div style={{ fontSize: 13, color: 'var(--ink-light)', maxWidth: 520, lineHeight: 1.7 }}>Your direct line to Charlie Mulan.</div>
+                </div>
+                <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
+                  <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--rule)' }}>
+                    <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-mid)' }}>Conversation with Charlie Mulan</span>
+                  </div>
+                  <div style={{ padding: 24 }}>
+                    <MessageThread msgs={messages} memberId={currentMember?.id} isAdminView={false} />
                   </div>
                 </div>
               </div>
@@ -527,21 +613,6 @@ export default function Portal() {
                         <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#7BAE7F' }} />
                       </div>
                     ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activePage === 'messages' && (
-              <div>
-                <div style={{ marginBottom: 48 }}>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 10 }}>Direct</div>
-                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, fontWeight: 300, color: 'var(--ink)', marginBottom: 16 }}><em style={{ fontStyle: 'italic' }}>Messages</em></div>
-                </div>
-                <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
-                  <div style={{ padding: 24 }}>
-                    {messages.map((m, i) => <MessageRow key={m.id} m={m} i={i} onClick={() => setActiveMessage(m)} />)}
-                    {messages.length === 0 && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)', padding: '20px 0', textAlign: 'center' }}>No messages yet.</div>}
                   </div>
                 </div>
               </div>
@@ -617,24 +688,6 @@ export default function Portal() {
           </div>
         </main>
       </div>
-
-      {activeMessage && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(26,22,18,0.8)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setActiveMessage(null)}>
-          <div style={{ background: 'var(--paper)', width: 560, maxWidth: '95vw', border: '1px solid var(--rule)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ background: 'var(--ink)', padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 4 }}>Message</div>
-                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 20, color: '#F5F0E8' }}>{activeMessage.sender_name}</div>
-              </div>
-              <button onClick={() => setActiveMessage(null)} style={{ width: 32, height: 32, border: '1px solid rgba(245,240,232,0.2)', background: 'transparent', color: 'rgba(245,240,232,0.6)', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-            </div>
-            <div style={{ padding: 32 }}>
-              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 17, color: 'var(--ink)', lineHeight: 1.6, marginBottom: 24 }}>{activeMessage.body}</div>
-              <a href={`mailto:hello@iamthecreativejuice.com?subject=Re: ${activeMessage.sender_name}`} style={{ display: 'inline-block', background: '#C8813A', color: '#1A1612', fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', padding: '10px 20px', textDecoration: 'none', fontWeight: 500 }}>Reply by Email →</a>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showAdmin && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(26,22,18,0.85)', zIndex: 500, overflowY: 'auto' }}>
@@ -758,28 +811,10 @@ export default function Portal() {
               )}
               {adminTab === 'messages' && (
                 <div>
-                  {adminMessages.map(m => (
-                    <div key={m.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid var(--rule)', gap: 12 }}>
-                      <div>
-                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 3 }}>{m.sender_name}</div>
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)' }}>{(m.body || '').substring(0, 80)}{m.body?.length > 80 ? '...' : ''}</div>
-                      </div>
-                      <button onClick={() => deleteItem('messages', m.id)} style={{ background: 'transparent', color: '#C0392B', fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 12px', border: '1px solid rgba(192,57,43,0.3)', cursor: 'pointer', flexShrink: 0 }}>Remove</button>
-                    </div>
-                  ))}
-                  <div onClick={() => setShowAddMsg(!showAddMsg)} style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#C8813A', cursor: 'pointer', border: '1px dashed rgba(200,129,58,0.4)', padding: '12px 20px', textAlign: 'center', marginTop: 16, display: 'block' }}>+ Add New Message</div>
-                  {showAddMsg && (
-                    <div style={{ background: 'var(--paper-dark)', border: '1px solid var(--rule)', padding: 24, marginTop: 12 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                        <FormField label="Sender Name" value={newMsg.sender_name || ''} onChange={v => setNewMsg(f => ({ ...f, sender_name: v }))} placeholder="Charlie Mulan · Agency" />
-                        <FormField label="Sender Initial(s)" value={newMsg.sender_initial || ''} onChange={v => setNewMsg(f => ({ ...f, sender_initial: v }))} placeholder="CM" />
-                      </div>
-                      <FormField label="Message" value={newMsg.body || ''} onChange={v => setNewMsg(f => ({ ...f, body: v }))} textarea style={{ marginBottom: 16 }} />
-                      <FormField label="Time Display" value={newMsg.time_display || ''} onChange={v => setNewMsg(f => ({ ...f, time_display: v }))} placeholder="May 7" style={{ marginBottom: 16 }} />
-                      <button onClick={addMessage} style={{ background: '#C8813A', color: '#1A1612', fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500, padding: '12px 24px', border: 'none', cursor: 'pointer' }}>Add Message</button>
-                      <StatusMsg id="msg" />
-                    </div>
-                  )}
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-mid)', marginBottom: 16 }}>Message Thread · {currentMember?.name || '—'}</div>
+                    <MessageThread msgs={adminMessages} memberId={currentMember?.id} isAdminView={true} />
+                  </div>
                 </div>
               )}
               {adminTab === 'requests' && (
@@ -864,20 +899,6 @@ function OppRow({ o }) {
       <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 6 }}>{o.tag}</div>
       <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 4, lineHeight: 1.3 }}>{o.title}</div>
       <div style={{ fontSize: 11, color: 'var(--ink-light)', lineHeight: 1.5 }}>{o.detail}</div>
-    </div>
-  )
-}
-
-function MessageRow({ m, i, onClick }) {
-  const colors = ['#C8813A', '#D4C5B0', '#B5C9C0', '#C4B5A0', '#A0B5C4']
-  return (
-    <div onClick={onClick} style={{ display: 'flex', gap: 12, padding: '14px 0', borderBottom: '1px solid var(--rule)', cursor: 'pointer' }}>
-      <div style={{ width: 30, height: 30, borderRadius: '50%', background: colors[i % colors.length], display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Cormorant Garamond, serif', fontSize: 12, fontWeight: 500, color: 'var(--ink)', flexShrink: 0, marginTop: 2 }}>{m.sender_initial || '?'}</div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.08em', color: 'var(--ink-mid)', marginBottom: 3 }}>{m.sender_name}</div>
-        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 14, color: 'var(--ink)', lineHeight: 1.4 }}>{m.body}</div>
-      </div>
-      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, color: 'var(--ink-light)', flexShrink: 0, marginTop: 4 }}>{m.time_display}</div>
     </div>
   )
 }
