@@ -11,7 +11,7 @@ const globalStyles = `
   :root { --paper:#F5F0E8; --paper-dark:#EDE7D9; --ink:#1A1612; --ink-mid:#3D342A; --ink-light:#7A6E62; --amber:#C8813A; --rule:rgba(26,22,18,0.12); }
   *{margin:0;padding:0;box-sizing:border-box;}
   body{background:var(--paper);color:var(--ink);font-family:'DM Sans',sans-serif;font-weight:300;}
-  ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-thumb{background:rgba(26,22,18,0.12);border-radius:2px;}
+  ::-webkit-scrollbar{width:8px;} ::-webkit-scrollbar-track{background:rgba(26,22,18,0.05);} ::-webkit-scrollbar-thumb{background:rgba(200,129,58,0.5);border-radius:4px;} ::-webkit-scrollbar-thumb:hover{background:rgba(200,129,58,0.8);}
   input,textarea,button{font-family:'DM Sans',sans-serif;}
   a{color:inherit;}
 `
