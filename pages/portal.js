@@ -1,506 +1,463 @@
-import { useState, useEffect, useRef } from 'react'
-import Head from 'next/head'
-import { supabase } from '../lib/supabase'
+import { useState, useRef, useEffect } from "react";
 
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'hello@iamthecreativejuice.com'
-const ADMIN_PASSWORD = 'charliemulan2026'
-const AVATAR_COLORS = ['#C8813A','#D4C5B0','#B5C9C0','#C4B5A0','#A0B5C4','#C4A0B5']
+const MEMBER = {
+  name: "Nia Okafor",
+  initials: "N",
+  discipline: "Music Creative · Consultant · Founder",
+  building: "A creative consultancy for independent musicians — helping artists develop their IP, position their work, and build sustainable creative careers.",
+  season: "Season 1 — Creators of New Earth",
+  memberSince: "April 2026",
+  location: "Atlanta, GA",
+  deliverables: [
+    { type: "PDF", name: "Brand Strategy Brief · May 2026", meta: "Strategy · Uploaded May 05, 2026", isNew: true },
+    { type: "DOC", name: "Session Notes · April 30, 2026", meta: "Session Notes · Uploaded May 01, 2026", isNew: true },
+    { type: "PDF", name: "IP Mapping Framework · Your Work", meta: "Framework · Uploaded April 20, 2026", isNew: false },
+    { type: "DOC", name: "Session Notes · April 14, 2026", meta: "Session Notes · Uploaded April 15, 2026", isNew: false },
+  ],
+  opportunities: [
+    { tag: "Grant · Music", title: "NMAAHC Music Innovation Fund", detail: "Open to independent musicians building culturally significant projects. Awards up to $25,000. Deadline June 1, 2026." },
+    { tag: "Residency", title: "Creatives Rebuild NY — Artist Employment Program", detail: "Salaried positions for working artists embedded in partner organizations across New York. Rolling applications." },
+    { tag: "Speaking · Industry", title: "A3C Festival Speaker Submissions", detail: "Annual conference for independent music industry professionals. Speaker applications open through May 20." },
+    { tag: "Publishing", title: "Pitchfork — Contributor Call", detail: "Open call for music criticism and long-form cultural writing. Aligned with your IP development work." },
+    { tag: "Fellowship", title: "Sundance Institute · Creative Producing Fellowship", detail: "For independent creative producers building original work. Application opens May 15." },
+  ],
+  roomMembers: [
+    { initial: "M", name: "Maya Reeves", work: "Licensing her creative IP across fashion + music", online: true, bg: "#D4C5B0" },
+    { initial: "D", name: "Dana Kim", work: "Building an independent publishing imprint", online: true, bg: "#B5C9C0" },
+    { initial: "J", name: "Jordan Ellis", work: "Developing a cultural documentary series", online: false, bg: "#C4B5A0" },
+    { initial: "N", name: "Nia Okafor", work: "Creative consultancy for independent musicians", online: true, bg: "#C8813A" },
+  ],
+  messages: [
+    { initial: "CM", name: "Charlie Mulan · Agency", text: "Your Brand Strategy Brief is ready. I've uploaded it to your deliverables. Let me know if you'd like to walk through it before our session.", time: "May 5", bg: "#C8813A" },
+    { initial: "M", name: "Maya Reeves", text: "Hey — saw you're also working in music. Would love to compare notes on the licensing side.", time: "May 4", bg: "#D4C5B0" },
+    { initial: "D", name: "Dana Kim", text: "Thank you for the introduction to the publishing contact. Already in conversation.", time: "April 30", bg: "#B5C9C0" },
+  ],
+  roomMessages: [
+    { initial: "M", name: "Maya R.", text: "Anyone else working on positioning their IP for licensing? Would love to connect on this.", time: "2h ago", bg: "#D4C5B0" },
+    { initial: "D", name: "Dana K.", text: "Just submitted the proposal we worked on in session. Fingers crossed.", time: "Yesterday", bg: "#B5C9C0" },
+    { initial: "CM", name: "Charlie Mulan", text: "This week's opportunities digest is live. Five resources curated specifically for your work.", time: "May 5", bg: "#C8813A" },
+  ],
+};
 
-const globalStyles = `
+const SYSTEM_PROMPT = `You are Circle Intelligence, the creative intelligence agent for Charlie's Circle — the members-only community of Charlie Mulan Creative Intelligence Agency.
+
+Your role: provide strategic, grounded, intelligent support to wave-making creators who are building ideas, products, and movements that evolve human consciousness.
+
+The member you are speaking with:
+- Name: Nia Okafor
+- Discipline: Music Creative · Consultant · Founder
+- Currently building: A creative consultancy for independent musicians — helping artists develop their IP, position their work, and build sustainable creative careers.
+- Season: Season 1 — Creators of New Earth
+- Member since: April 2026
+- Location: Atlanta, GA
+- Upcoming session: May 14, 2026 · 2:00 PM EST — Monthly Strategy + Project Management
+- Recent deliverables: Brand Strategy Brief (May 2026); Session Notes (April 30); IP Mapping Framework; Session Notes (April 14)
+- Current opportunities: NMAAHC Music Innovation Fund (grant up to $25k, deadline June 1); Creatives Rebuild NY Artist Employment (rolling); A3C Festival Speaker Submissions (deadline May 20); Pitchfork Contributor Call; Sundance Institute Creative Producing Fellowship (opens May 15)
+- Fellow Season 1 members: Maya Reeves (licensing IP across fashion + music); Dana Kim (independent publishing imprint); Jordan Ellis (cultural documentary series)
+
+Agency philosophy:
+1. The future belongs to those who build it
+2. Creativity expands reality
+3. Thought and creation evolve human consciousness
+4. Thoughts become ideas through practice
+5. Intellectual property as containers for ideas
+
+Voice and tone:
+- Grounded clarity, considered imagination, unhurried authority
+- Declarative. No hedging. No filler phrases like "great question" or "certainly"
+- Use "cultivate" not "architect", "work" or "transmission" not "content"
+- Speak as a senior creative strategist: direct, warm, specific
+- Do not use em dashes. Use colons or full stops instead.
+- Responses should feel like guidance from someone who knows this member's work deeply
+
+You can help with: strategic thinking, session preparation, IP development, opportunity evaluation, creative direction, positioning, next-step clarity, grant/pitch drafting, and anything that serves the member's creative and professional growth.
+
+Keep responses focused and useful. Reference specific deliverables and opportunities when relevant. Be specific. Be grounded.`;
+
+const PROMPT_CHIPS = [
+  { label: "This week's opportunities", prompt: "Which of the opportunities in my portal are most relevant to where I am right now?" },
+  { label: "Prepare for session", prompt: "Help me prepare for my strategy session on May 14. What should I come ready to discuss?" },
+  { label: "IP positioning", prompt: "How should I think about positioning my consultancy's IP?" },
+  { label: "Next creative move", prompt: "Based on what you know about my work, what should my next creative move be?" },
+  { label: "Draft grant pitch", prompt: "Help me draft a pitch for the NMAAHC Music Innovation Fund grant." },
+  { label: "Founding member focus", prompt: "What are the most important things I should be building as a Season 1 founding member?" },
+];
+
+const css = `
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
-  :root { --paper:#F5F0E8; --paper-dark:#EDE7D9; --ink:#1A1612; --ink-mid:#3D342A; --ink-light:#7A6E62; --amber:#C8813A; --rule:rgba(26,22,18,0.12); }
+  :root {
+    --paper:#F5F0E8; --paper-dark:#EDE7D9; --ink:#1A1612; --ink-mid:#3D342A;
+    --ink-light:#7A6E62; --amber:#C8813A; --amber-light:#E8A055;
+    --rule:rgba(26,22,18,0.12); --sidebar-w:240px; --agent-w:380px;
+  }
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{background:var(--paper);color:var(--ink);font-family:'DM Sans',sans-serif;font-weight:300;}
-  ::-webkit-scrollbar{width:8px;} ::-webkit-scrollbar-track{background:rgba(26,22,18,0.05);} ::-webkit-scrollbar-thumb{background:rgba(200,129,58,0.5);border-radius:4px;} ::-webkit-scrollbar-thumb:hover{background:rgba(200,129,58,0.8);}
-  input,textarea,button{font-family:'DM Sans',sans-serif;}
-  a{color:inherit;}
-`
+  .portal-root{font-family:'DM Sans',sans-serif;font-weight:300;background:var(--paper);color:var(--ink);min-height:100vh;display:flex;position:relative;overflow:hidden;}
+  .portal-root::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:1000;opacity:0.4;}
+  .sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--ink);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;}
+  .sidebar-logo{padding:28px 24px 20px;border-bottom:1px solid rgba(245,240,232,0.08);}
+  .sidebar-agency{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(245,240,232,0.35);margin-bottom:4px;}
+  .sidebar-circle{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:400;color:var(--paper);}
+  .sidebar-season{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--amber);margin-top:5px;}
+  .sidebar-member{padding:20px 24px;border-bottom:1px solid rgba(245,240,232,0.08);}
+  .member-av{width:40px;height:40px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:500;color:var(--ink);margin-bottom:10px;}
+  .member-nm{font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--paper);margin-bottom:2px;}
+  .member-bld{font-size:10px;color:rgba(245,240,232,0.4);line-height:1.4;}
+  .member-badge{display:inline-flex;margin-top:8px;background:rgba(200,129,58,0.15);border:1px solid rgba(200,129,58,0.3);padding:3px 8px;border-radius:2px;font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:var(--amber);}
+  .sidebar-nav{flex:1;padding:16px 0;overflow-y:auto;}
+  .nav-section{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(245,240,232,0.18);padding:14px 24px 7px;}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 24px;cursor:pointer;transition:all 0.18s;position:relative;border:none;background:none;width:100%;text-align:left;}
+  .nav-item:hover{background:rgba(245,240,232,0.04);}
+  .nav-item.active{background:rgba(200,129,58,0.1);}
+  .nav-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--amber);}
+  .nav-lbl{font-size:11px;color:rgba(245,240,232,0.45);letter-spacing:0.02em;}
+  .nav-item.active .nav-lbl{color:var(--paper);}
+  .nav-badge-pill{margin-left:auto;background:var(--amber);color:var(--ink);font-family:'DM Mono',monospace;font-size:7px;font-weight:500;padding:2px 5px;border-radius:2px;}
+  .agent-trigger{margin:10px 14px 4px;border:1px solid rgba(200,129,58,0.25) !important;background:rgba(200,129,58,0.06) !important;padding:10px 12px !important;border-radius:2px;}
+  .agent-trigger:hover{background:rgba(200,129,58,0.11) !important;}
+  .agent-trigger.agent-on{background:rgba(200,129,58,0.16) !important;border-color:rgba(200,129,58,0.5) !important;}
+  .agent-trigger .nav-lbl{color:var(--amber) !important;font-size:10px !important;}
+  .agent-trigger.active::before{display:none;}
+  .pulse-dot{width:5px;height:5px;border-radius:50%;background:var(--amber);margin-left:auto;animation:pulse 2s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.35;transform:scale(0.65)}}
+  .sidebar-bottom{padding:18px 24px;border-top:1px solid rgba(245,240,232,0.08);}
+  .next-lbl{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:rgba(245,240,232,0.22);margin-bottom:4px;}
+  .next-date{font-family:'Cormorant Garamond',serif;font-size:13px;color:rgba(245,240,232,0.65);}
+  .main-content{margin-left:var(--sidebar-w);flex:1;min-height:100vh;display:flex;flex-direction:column;transition:margin-right 0.32s cubic-bezier(0.4,0,0.2,1);}
+  .main-content.agent-open{margin-right:var(--agent-w);}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:20px 40px;border-bottom:1px solid var(--rule);flex-shrink:0;}
+  .topbar-title{font-family:'Cormorant Garamond',serif;font-size:12px;color:var(--ink-light);letter-spacing:0.05em;}
+  .topbar-right{display:flex;align-items:center;gap:16px;}
+  .topbar-date{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;color:var(--ink-light);}
+  .notif-btn{width:30px;height:30px;border-radius:50%;border:1px solid var(--rule);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;transition:border-color 0.2s;}
+  .notif-btn:hover{border-color:var(--amber);}
+  .notif-dot{position:absolute;top:5px;right:6px;width:5px;height:5px;background:var(--amber);border-radius:50%;}
+  .page-content{padding:40px;flex:1;overflow-y:auto;max-height:calc(100vh - 65px);}
+  .welcome{margin-bottom:40px;}
+  .eyebrow{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.2em;text-transform:uppercase;color:var(--amber);margin-bottom:8px;}
+  .page-heading{font-family:'Cormorant Garamond',serif;font-size:38px;font-weight:300;line-height:1.1;color:var(--ink);margin-bottom:14px;}
+  .page-heading em{font-style:italic;color:var(--ink-mid);}
+  .page-sub{font-size:12px;color:var(--ink-light);max-width:480px;line-height:1.7;}
+  .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule);margin-bottom:32px;}
+  .stat-card{background:var(--paper);padding:20px 24px;transition:background 0.18s;}
+  .stat-card:hover{background:var(--paper-dark);}
+  .stat-lbl{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:var(--ink-light);margin-bottom:8px;}
+  .stat-val{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;color:var(--ink);line-height:1;margin-bottom:3px;}
+  .stat-sub{font-size:10px;color:var(--ink-light);}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;}
+  .panel{border:1px solid var(--rule);background:var(--paper);}
+  .panel-hd{padding:16px 20px;border-bottom:1px solid var(--rule);display:flex;align-items:center;justify-content:space-between;}
+  .panel-ttl{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.16em;text-transform:uppercase;color:var(--ink-mid);}
+  .panel-act{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.12em;text-transform:uppercase;color:var(--amber);cursor:pointer;border:none;background:none;}
+  .panel-bd{padding:20px;}
+  .del-item{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--rule);cursor:pointer;transition:opacity 0.18s;}
+  .del-item:last-child{border-bottom:none;padding-bottom:0;}
+  .del-item:first-child{padding-top:0;}
+  .del-item:hover{opacity:0.65;}
+  .del-icon{width:32px;height:32px;background:var(--paper-dark);border:1px solid var(--rule);display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:7px;color:var(--ink-light);flex-shrink:0;}
+  .del-icon.new{background:rgba(200,129,58,0.08);border-color:rgba(200,129,58,0.25);color:var(--amber);}
+  .del-info{flex:1;}
+  .del-name{font-family:'Cormorant Garamond',serif;font-size:14px;color:var(--ink);margin-bottom:2px;}
+  .del-meta{font-family:'DM Mono',monospace;font-size:8px;color:var(--ink-light);letter-spacing:0.06em;}
+  .del-new{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.1em;text-transform:uppercase;color:var(--amber);border:1px solid rgba(200,129,58,0.3);padding:2px 6px;flex-shrink:0;align-self:center;}
+  .opp-item{padding:14px 0;border-bottom:1px solid var(--rule);}
+  .opp-item:last-child{border-bottom:none;padding-bottom:0;}
+  .opp-item:first-child{padding-top:0;}
+  .opp-tag{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.12em;text-transform:uppercase;color:var(--amber);margin-bottom:4px;}
+  .opp-title{font-family:'Cormorant Garamond',serif;font-size:14px;color:var(--ink);margin-bottom:3px;line-height:1.3;}
+  .opp-detail{font-size:10px;color:var(--ink-light);line-height:1.5;}
+  .session-block{background:var(--ink);padding:24px;display:flex;flex-direction:column;gap:14px;margin-bottom:20px;}
+  .session-lbl{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(245,240,232,0.28);}
+  .session-title{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:300;color:var(--paper);line-height:1.2;}
+  .session-dt{font-family:'DM Mono',monospace;font-size:10px;color:var(--amber);letter-spacing:0.07em;}
+  .session-btn{display:inline-flex;align-items:center;gap:6px;background:var(--amber);color:var(--ink);font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.14em;text-transform:uppercase;padding:9px 16px;border:none;cursor:pointer;transition:opacity 0.18s;align-self:flex-start;font-weight:500;}
+  .session-btn:hover{opacity:0.85;}
+  .session-prep{font-size:10px;color:rgba(245,240,232,0.3);line-height:1.6;border-top:1px solid rgba(245,240,232,0.07);padding-top:14px;}
+  .chat-item{display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--rule);cursor:pointer;transition:opacity 0.18s;}
+  .chat-item:last-child{border-bottom:none;padding-bottom:0;}
+  .chat-item:first-child{padding-top:0;}
+  .chat-item:hover{opacity:0.65;}
+  .chat-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:11px;font-weight:500;flex-shrink:0;margin-top:1px;}
+  .chat-body{flex:1;}
+  .chat-nm{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.07em;color:var(--ink-mid);margin-bottom:2px;}
+  .chat-msg{font-family:'Cormorant Garamond',serif;font-size:13px;color:var(--ink);line-height:1.4;}
+  .chat-time{font-family:'DM Mono',monospace;font-size:7px;color:var(--ink-light);flex-shrink:0;margin-top:3px;}
+  .mem-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--rule);cursor:pointer;transition:opacity 0.18s;}
+  .mem-item:last-child{border-bottom:none;}
+  .mem-item:first-child{padding-top:0;}
+  .mem-item:hover{opacity:0.65;}
+  .mem-dot{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:500;flex-shrink:0;}
+  .mem-info{flex:1;}
+  .mem-name{font-family:'Cormorant Garamond',serif;font-size:14px;color:var(--ink);margin-bottom:1px;}
+  .mem-work{font-size:10px;color:var(--ink-light);}
+  .online-dot{width:6px;height:6px;border-radius:50%;background:#7BAE7F;}
+  .offline-dot{width:6px;height:6px;border-radius:50%;background:var(--rule);}
+  .profile-identity{display:flex;align-items:flex-start;gap:24px;padding:28px;border-bottom:1px solid var(--rule);}
+  .profile-av{width:64px;height:64px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:500;color:var(--ink);flex-shrink:0;}
+  .profile-nm{font-family:'Cormorant Garamond',serif;font-size:26px;color:var(--ink);margin-bottom:3px;}
+  .profile-disc{font-size:12px;color:var(--ink-light);margin-bottom:10px;}
+  .profile-bld-lbl{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:var(--ink-light);margin-bottom:4px;}
+  .profile-bld{font-family:'Cormorant Garamond',serif;font-size:15px;font-style:italic;color:var(--ink-mid);line-height:1.4;}
+  .tab-bar{display:flex;border-bottom:1px solid var(--rule);padding:0 20px;}
+  .tab-item{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-light);padding:12px 0;margin-right:24px;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.18s;background:none;border-top:none;border-left:none;border-right:none;}
+  .tab-item.active{color:var(--ink);border-bottom-color:var(--amber);}
+  .agent-panel{position:fixed;top:0;right:0;bottom:0;width:var(--agent-w);background:var(--ink);z-index:200;display:flex;flex-direction:column;transform:translateX(100%);transition:transform 0.32s cubic-bezier(0.4,0,0.2,1);border-left:1px solid rgba(245,240,232,0.07);}
+  .agent-panel.open{transform:translateX(0);}
+  .agent-hd{padding:20px 20px 16px;border-bottom:1px solid rgba(245,240,232,0.08);flex-shrink:0;}
+  .agent-hd-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;}
+  .agent-eyebrow{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(245,240,232,0.22);margin-bottom:4px;}
+  .agent-name-display{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:300;color:var(--paper);}
+  .agent-name-display em{font-style:italic;color:var(--amber-light);}
+  .agent-status-row{display:flex;align-items:center;gap:5px;margin-top:4px;}
+  .agent-status-dot{width:5px;height:5px;border-radius:50%;background:#7BAE7F;animation:pulse 2.5s ease-in-out infinite;}
+  .agent-status-txt{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(245,240,232,0.28);}
+  .agent-close-btn{width:26px;height:26px;border:1px solid rgba(245,240,232,0.1);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(245,240,232,0.38);font-size:12px;transition:all 0.18s;border-radius:1px;}
+  .agent-close-btn:hover{border-color:rgba(245,240,232,0.3);color:var(--paper);}
+  .agent-chips-wrap{padding:0 20px;border-bottom:1px solid rgba(245,240,232,0.06);flex-shrink:0;}
+  .chips-lbl{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:rgba(245,240,232,0.18);padding:14px 0 8px;}
+  .chips-grid{display:flex;flex-wrap:wrap;gap:5px;padding-bottom:14px;}
+  .chip{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.08em;text-transform:uppercase;color:rgba(245,240,232,0.4);border:1px solid rgba(245,240,232,0.09);padding:5px 9px;cursor:pointer;transition:all 0.15s;border-radius:1px;background:transparent;}
+  .chip:hover{border-color:rgba(200,129,58,0.4);color:var(--amber);background:rgba(200,129,58,0.05);}
+  .agent-msgs{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:14px;scroll-behavior:smooth;}
+  .agent-msgs::-webkit-scrollbar{width:3px;}
+  .agent-msgs::-webkit-scrollbar-thumb{background:rgba(245,240,232,0.08);}
+  .agent-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px 20px;gap:10px;}
+  .empty-glyph{font-family:'Cormorant Garamond',serif;font-size:44px;color:rgba(200,129,58,0.18);line-height:1;}
+  .empty-txt{font-family:'Cormorant Garamond',serif;font-size:15px;font-style:italic;color:rgba(245,240,232,0.25);line-height:1.5;max-width:220px;}
+  .msg-wrap{display:flex;flex-direction:column;gap:3px;}
+  .msg-from{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.12em;text-transform:uppercase;}
+  .msg-from.agent{color:var(--amber);}
+  .msg-from.user{color:rgba(245,240,232,0.28);text-align:right;}
+  .msg-bubble{padding:10px 12px;border-radius:1px;font-family:'Cormorant Garamond',serif;font-size:13px;line-height:1.6;}
+  .msg-bubble.agent{background:rgba(245,240,232,0.055);border:1px solid rgba(245,240,232,0.07);border-left:2px solid rgba(200,129,58,0.38);color:rgba(245,240,232,0.82);white-space:pre-wrap;}
+  .msg-bubble.user{background:rgba(200,129,58,0.1);border:1px solid rgba(200,129,58,0.2);color:rgba(245,240,232,0.7);align-self:flex-end;max-width:88%;}
+  .typing-wrap{display:flex;align-items:center;gap:4px;padding:10px 12px;background:rgba(245,240,232,0.04);border:1px solid rgba(245,240,232,0.06);border-left:2px solid rgba(200,129,58,0.28);width:fit-content;}
+  .t-dot{width:4px;height:4px;background:var(--amber);border-radius:50%;animation:tdot 1.2s ease-in-out infinite;}
+  .t-dot:nth-child(2){animation-delay:0.2s}
+  .t-dot:nth-child(3){animation-delay:0.4s}
+  @keyframes tdot{0%,100%{opacity:0.18;transform:scale(0.75)}50%{opacity:1;transform:scale(1.1)}}
+  .agent-input-area{padding:14px 20px 18px;border-top:1px solid rgba(245,240,232,0.08);flex-shrink:0;}
+  .input-wrap{display:flex;align-items:flex-end;gap:8px;border:1px solid rgba(245,240,232,0.11);background:rgba(245,240,232,0.04);padding:8px 12px;transition:border-color 0.2s;}
+  .input-wrap:focus-within{border-color:rgba(200,129,58,0.32);}
+  .agent-textarea{flex:1;background:transparent;border:none;outline:none;font-family:'Cormorant Garamond',serif;font-size:13px;color:rgba(245,240,232,0.75);resize:none;line-height:1.5;min-height:20px;max-height:90px;overflow-y:auto;}
+  .agent-textarea::placeholder{color:rgba(245,240,232,0.18);}
+  .send-btn{width:26px;height:26px;background:var(--amber);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity 0.18s;}
+  .send-btn:hover{opacity:0.85;}
+  .send-btn:disabled{opacity:0.28;cursor:not-allowed;}
+  .input-footer{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.08em;color:rgba(245,240,232,0.13);text-align:center;margin-top:8px;line-height:1.5;}
+`;
+
+const icons = {
+  home: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 6L8 2L14 6V14H10V10H6V14H2V6Z" stroke="currentColor" strokeWidth="1" fill="none"/></svg>,
+  deliverables: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="14" rx="1" stroke="currentColor" strokeWidth="1"/><line x1="5" y1="6" x2="11" y2="6" stroke="currentColor" strokeWidth="1"/><line x1="5" y1="9" x2="11" y2="9" stroke="currentColor" strokeWidth="1"/><line x1="5" y1="12" x2="8" y2="12" stroke="currentColor" strokeWidth="1"/></svg>,
+  opportunities: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5" stroke="currentColor" strokeWidth="1"/><path d="M8 5V8L10 10" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/></svg>,
+  community: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="6" r="3" stroke="currentColor" strokeWidth="1"/><circle cx="11" cy="5" r="2" stroke="currentColor" strokeWidth="1"/><path d="M1 14C1 11.8 3.2 10 6 10C8.8 10 11 11.8 11 14" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/><path d="M11 9C12.7 9 14 10.1 14 14" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/></svg>,
+  messages: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 3H14V11H9L6 14V11H2V3Z" stroke="currentColor" strokeWidth="1" fill="none"/></svg>,
+  profile: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1"/><path d="M2 14C2 11.2 4.7 9 8 9C11.3 9 14 11.2 14 14" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/></svg>,
+  agent: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="#C8813A" strokeWidth="1"/><path d="M8 1V3M8 13V15M1 8H3M13 8H15" stroke="#C8813A" strokeWidth="1" strokeLinecap="round"/><path d="M3.5 3.5L5 5M11 11L12.5 12.5M3.5 12.5L5 11M11 5L12.5 3.5" stroke="#C8813A" strokeWidth="1" strokeLinecap="round" opacity="0.5"/></svg>,
+  send: <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M1 11L11 1M11 1H4M11 1V8" stroke="#1A1612" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+};
 
 export default function Portal() {
-  const [screen, setScreen] = useState('login')
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [currentMember, setCurrentMember] = useState(null)
-  const [allMembers, setAllMembers] = useState([])
-  const [activePage, setActivePage] = useState('home')
-  const [loginEmail, setLoginEmail] = useState('')
-  const [loginPassword, setLoginPassword] = useState('')
-  const [loginError, setLoginError] = useState('')
-  const [loginLoading, setLoginLoading] = useState(false)
-  const [showAdmin, setShowAdmin] = useState(false)
-  const [adminTab, setAdminTab] = useState('member')
-  const [deliverables, setDeliverables] = useState([])
-  const [opportunities, setOpportunities] = useState([])
-  const [messages, setMessages] = useState([])
-  const [requests, setRequests] = useState([])
-  const [communityMembers, setCommunityMembers] = useState([])
-  const [activeThread, setActiveThread] = useState(null)
-  const [threadMessages, setThreadMessages] = useState([])
-  const [replyBody, setReplyBody] = useState('')
-  const [uploadDesc, setUploadDesc] = useState('')
-  const [uploadNotes, setUploadNotes] = useState('')
-  const [uploadStatus, setUploadStatus] = useState('')
-  const fileInputRef = useRef()
-  const [aForm, setAForm] = useState({})
-  const [adminDeliverables, setAdminDeliverables] = useState([])
-  const [adminOpportunities, setAdminOpportunities] = useState([])
-  const [adminMessages, setAdminMessages] = useState([])
-  const [adminRequests, setAdminRequests] = useState([])
-  const [showAddDel, setShowAddDel] = useState(false)
-  const [showAddOpp, setShowAddOpp] = useState(false)
-  const [showAddMsg, setShowAddMsg] = useState(false)
-  const [showAddReq, setShowAddReq] = useState(false)
-  const [showAddMember, setShowAddMember] = useState(false)
-  const [newDel, setNewDel] = useState({})
-  const [newOpp, setNewOpp] = useState({})
-  const [newMsg, setNewMsg] = useState({})
-  const [newReq, setNewReq] = useState({})
-  const [newMem, setNewMem] = useState({})
-  const [saveStatus, setSaveStatus] = useState({})
-  const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const [page, setPage] = useState("home");
+  const [agentOpen, setAgentOpen] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [started, setStarted] = useState(false);
+  const msgsEndRef = useRef(null);
 
-  async function handleLogin() {
-    setLoginError('')
-    setLoginLoading(true)
-    if (loginEmail === ADMIN_EMAIL && loginPassword === ADMIN_PASSWORD) {
-      setIsAdmin(true)
-      await loadAllMembers()
-      setScreen('portal')
-      setActivePage('admin-home')
-      setLoginLoading(false)
-      return
-    }
-    const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword })
-    if (error) {
-      setLoginError('Invalid email or password.')
-      setLoginLoading(false)
-      return
-    }
-    const { data: memberData } = await supabase.from('members').select('*').eq('email', loginEmail).single()
-    if (memberData) {
-      setCurrentMember(memberData)
-      await loadMemberData(memberData.id)
-    }
-    setIsAdmin(false)
-    setScreen('portal')
-    setActivePage('home')
-    setLoginLoading(false)
-  }
+  useEffect(() => {
+    if (msgsEndRef.current) msgsEndRef.current.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    setScreen('login')
-    setIsAdmin(false)
-    setCurrentMember(null)
-    setActivePage('home')
-    setLoginEmail('')
-    setLoginPassword('')
-  }
-
-  async function loadAllMembers() {
-    const { data } = await supabase.from('members').select('*').order('created_at')
-    if (data) {
-      setAllMembers(data)
-      if (data.length > 0 && !currentMember) {
-        setCurrentMember(data[0])
-        await loadMemberData(data[0].id)
-      }
-    }
-  }
-
-  async function loadMemberData(memberId) {
-    const [dels, opps, msgs, reqs, community] = await Promise.all([
-      supabase.from('deliverables').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
-      supabase.from('opportunities').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
-      supabase.from('messages').select('*').eq('member_id', memberId).order('created_at', { ascending: true }),
-      supabase.from('file_requests').select('*').eq('member_id', memberId).eq('status', 'pending').order('created_at', { ascending: false }),
-      supabase.from('members').select('name, brand, building_short').order('created_at'),
-    ])
-    if (dels.data) setDeliverables(dels.data)
-    if (opps.data) setOpportunities(opps.data)
-    if (msgs.data) setMessages(msgs.data)
-    if (reqs.data) setRequests(reqs.data)
-    if (community.data) setCommunityMembers(community.data)
-  }
-
-  async function loadAdminData(memberId) {
-    const { data: m } = await supabase.from('members').select('*').eq('id', memberId).single()
-    if (m) setAForm(m)
-    const [dels, opps, msgs, reqs] = await Promise.all([
-      supabase.from('deliverables').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
-      supabase.from('opportunities').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
-      supabase.from('messages').select('*').eq('member_id', memberId).order('created_at', { ascending: true }),
-      supabase.from('file_requests').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
-    ])
-    if (dels.data) setAdminDeliverables(dels.data)
-    if (opps.data) setAdminOpportunities(opps.data)
-    if (msgs.data) setAdminMessages(msgs.data)
-    if (reqs.data) setAdminRequests(reqs.data)
-  }
-
-  async function switchMember(member) {
-    setCurrentMember(member)
-    await loadMemberData(member.id)
-    await loadAdminData(member.id)
-  }
-
-  async function sendReply(memberId, body, isAdmin) {
-    if (!body.trim()) return
-    const senderName = isAdmin ? 'Charlie Mulan · Agency' : currentMember?.name
-    const senderInitial = isAdmin ? 'CM' : (currentMember?.name?.[0] || '?')
-    const now = new Date()
-    const timeDisplay = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    await supabase.from('messages').insert({
-      member_id: memberId,
-      sender_name: senderName,
-      sender_initial: senderInitial,
-      body: body.trim(),
-      time_display: timeDisplay,
-      is_reply: !isAdmin
-    })
-    setReplyBody('')
-    if (isAdmin) {
-      await loadAdminData(memberId)
-    } else {
-      await loadMemberData(memberId)
-    }
-  }
-
-  async function saveMemberInfo() {
-    const { error } = await supabase.from('members').update(aForm).eq('id', currentMember.id)
-    if (error) showSaveStatus('member', error.message, 'error')
-    else {
-      showSaveStatus('member', 'Saved.', 'success')
-      await loadAllMembers()
-      setCurrentMember({ ...currentMember, ...aForm })
-      await loadMemberData(currentMember.id)
-    }
-  }
-
-  async function addDeliverable() {
-    const { error } = await supabase.from('deliverables').insert({ ...newDel, member_id: currentMember.id })
-    if (error) showSaveStatus('del', error.message, 'error')
-    else {
-      showSaveStatus('del', 'Added.', 'success')
-      setNewDel({})
-      setShowAddDel(false)
-      await loadMemberData(currentMember.id)
-      await loadAdminData(currentMember.id)
-    }
-  }
-
-  async function addOpportunity() {
-    const { error } = await supabase.from('opportunities').insert({ ...newOpp, member_id: currentMember.id })
-    if (error) showSaveStatus('opp', error.message, 'error')
-    else {
-      showSaveStatus('opp', 'Added.', 'success')
-      setNewOpp({})
-      setShowAddOpp(false)
-      await loadMemberData(currentMember.id)
-      await loadAdminData(currentMember.id)
-    }
-  }
-
-  async function addMessage() {
-    const now = new Date()
-    const timeDisplay = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    const { error } = await supabase.from('messages').insert({
-      ...newMsg,
-      member_id: currentMember.id,
-      sender_name: newMsg.sender_name || 'Charlie Mulan · Agency',
-      sender_initial: newMsg.sender_initial || 'CM',
-      time_display: newMsg.time_display || timeDisplay,
-      is_reply: false
-    })
-    if (error) showSaveStatus('msg', error.message, 'error')
-    else {
-      showSaveStatus('msg', 'Added.', 'success')
-      setNewMsg({})
-      setShowAddMsg(false)
-      await loadMemberData(currentMember.id)
-      await loadAdminData(currentMember.id)
-    }
-  }
-
-  async function addRequest() {
-    const { error } = await supabase.from('file_requests').insert({ ...newReq, member_id: currentMember.id, status: 'pending' })
-    if (error) showSaveStatus('req', error.message, 'error')
-    else {
-      showSaveStatus('req', 'Request sent.', 'success')
-      setNewReq({})
-      setShowAddReq(false)
-      await loadMemberData(currentMember.id)
-      await loadAdminData(currentMember.id)
-    }
-  }
-
-  async function deleteItem(table, id) {
-    if (!confirm('Remove this item?')) return
-    await supabase.from(table).delete().eq('id', id)
-    await loadMemberData(currentMember.id)
-    await loadAdminData(currentMember.id)
-  }
-
-  async function createMember() {
-    if (!newMem.email || !newMem.password || !newMem.name) {
-      showSaveStatus('newmem', 'Name, email and password required.', 'error')
-      return
-    }
-    await supabase.auth.signUp({ email: newMem.email, password: newMem.password })
-    const { error } = await supabase.from('members').insert({
-      name: newMem.name,
-      email: newMem.email,
-      brand: newMem.brand || '',
-      industry: newMem.industry || '',
-      location: newMem.location || '',
-      tier: 'Member',
-      member_since: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-      sessions_completed: 0
-    })
-    if (error) showSaveStatus('newmem', error.message, 'error')
-    else {
-      showSaveStatus('newmem', `Created. Login: ${newMem.email} / ${newMem.password}`, 'success')
-      setNewMem({})
-      setShowAddMember(false)
-      await loadAllMembers()
-    }
-  }
-
-  async function handleFileUpload(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    setUploadStatus('uploading')
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('description', uploadDesc || file.name)
-    formData.append('memberId', currentMember?.id || '')
+  const sendMessage = async (text) => {
+    const msg = text || input.trim();
+    if (!msg || loading) return;
+    setInput("");
+    if (!started) setStarted(true);
+    const userMsg = { role: "user", content: msg };
+    const newHistory = [...messages, userMsg];
+    setMessages(newHistory);
+    setLoading(true);
     try {
-      const res = await fetch('/api/drive/upload', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (data.success) {
-        await supabase.from('member_submissions').insert({
-          member_id: currentMember?.id,
-          description: uploadDesc,
-          notes: uploadNotes,
-          file_url: data.viewLink,
-          file_name: data.fileName
-        })
-        setUploadStatus('success')
-        setUploadDesc('')
-        setUploadNotes('')
-        e.target.value = ''
-      } else {
-        setUploadStatus('error')
-      }
+      const res = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          system: SYSTEM_PROMPT,
+          messages: newHistory,
+        }),
+      });
+      const data = await res.json();
+      const reply = data.content?.find(b => b.type === "text")?.text || "Something went quiet. Try again.";
+      setMessages([...newHistory, { role: "assistant", content: reply }]);
     } catch {
-      setUploadStatus('error')
+      setMessages([...newHistory, { role: "assistant", content: "There was an issue reaching Circle Intelligence. Check your connection and try again." }]);
     }
-  }
+    setLoading(false);
+  };
 
-  function showSaveStatus(key, msg, type) {
-    setSaveStatus(s => ({ ...s, [key]: { msg, type } }))
-    setTimeout(() => setSaveStatus(s => ({ ...s, [key]: null })), 4000)
-  }
+  const triggerPrompt = (prompt) => {
+    if (!agentOpen) setAgentOpen(true);
+    setTimeout(() => sendMessage(prompt), agentOpen ? 0 : 350);
+  };
 
-  function getInitial(name) { return name ? name[0].toUpperCase() : '?' }
-  const firstName = currentMember?.name?.split(' ')[0] || 'there'
-  const newDelCount = deliverables.filter(d => d.is_new).length
-  const unreadMessages = messages.filter(m => !m.is_reply).length
+  const navItems = [
+    { id: "home", label: "Home", icon: icons.home },
+    { id: "deliverables", label: "My Deliverables", icon: icons.deliverables, badge: "2" },
+    { id: "opportunities", label: "Opportunities", icon: icons.opportunities, badge: "5" },
+    { id: "community", label: "The Room", icon: icons.community },
+    { id: "messages", label: "Messages", icon: icons.messages, badge: "3" },
+  ];
 
-  function StatusMsg({ id }) {
-    if (!saveStatus[id]) return null
-    return (
-      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, padding: '10px 14px', marginTop: 12, background: saveStatus[id].type === 'success' ? 'rgba(123,174,127,0.1)' : 'rgba(192,57,43,0.1)', color: saveStatus[id].type === 'success' ? '#4a8a4f' : '#C0392B', border: `1px solid ${saveStatus[id].type === 'success' ? 'rgba(123,174,127,0.3)' : 'rgba(192,57,43,0.3)'}` }}>
-        {saveStatus[id].msg}
-      </div>
-    )
-  }
-
-  function MessageThread({ msgs, memberId, isAdminView }) {
-    const messagesEndRef = useRef(null)
-    useEffect(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, [msgs])
-
-    return (
-      <div>
-        <div style={{ maxHeight: 400, overflowY: 'auto', border: '1px solid var(--rule)', padding: 20, background: '#faf7f2', marginBottom: 16 }}>
-          {msgs.length === 0 && (
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)', textAlign: 'center', padding: '20px 0' }}>No messages yet. Start the conversation.</div>
-          )}
-          {msgs.map((m, i) => {
-            const isFromAdmin = !m.is_reply
-            return (
-              <div key={m.id} style={{ display: 'flex', gap: 12, marginBottom: 16, flexDirection: isFromAdmin ? 'row' : 'row-reverse' }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: isFromAdmin ? '#C8813A' : '#B5C9C0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Cormorant Garamond, serif', fontSize: 13, fontWeight: 500, color: '#1A1612', flexShrink: 0 }}>{m.sender_initial || '?'}</div>
-                <div style={{ maxWidth: '70%' }}>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.08em', color: 'var(--ink-light)', marginBottom: 4, textAlign: isFromAdmin ? 'left' : 'right' }}>{m.sender_name} · {m.time_display}</div>
-                  <div style={{ background: isFromAdmin ? 'var(--ink)' : 'white', color: isFromAdmin ? '#F5F0E8' : 'var(--ink)', padding: '10px 14px', borderRadius: isFromAdmin ? '2px 12px 12px 12px' : '12px 2px 12px 12px', fontFamily: 'DM Sans, sans-serif', fontSize: 13, lineHeight: 1.5, border: isFromAdmin ? 'none' : '1px solid var(--rule)' }}>{m.body}</div>
-                </div>
-              </div>
-            )
-          })}
-          <div ref={messagesEndRef} />
-        </div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <textarea
-            value={replyBody}
-            onChange={e => setReplyBody(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(memberId, replyBody, isAdminView) } }}
-            placeholder={isAdminView ? 'Message to member... (Enter to send)' : 'Reply... (Enter to send)'}
-            style={{ flex: 1, background: 'var(--paper-dark)', border: '1px solid var(--rule)', color: 'var(--ink)', fontFamily: 'DM Sans, sans-serif', fontSize: 13, padding: '10px 14px', outline: 'none', resize: 'none', minHeight: 60 }}
-          />
-          <button onClick={() => sendReply(memberId, replyBody, isAdminView)} style={{ background: '#C8813A', color: '#1A1612', fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500, padding: '10px 16px', border: 'none', cursor: 'pointer', alignSelf: 'flex-end' }}>Send</button>
-        </div>
-      </div>
-    )
-  }
-
-  if (screen === 'login') {
-    return (
-      <>
-        <Head><title>Charlie&apos;s Circle</title></Head>
-        <style>{globalStyles}</style>
-        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ink)' }}>
-          <div style={{ width: 400, padding: '56px 48px', border: '1px solid rgba(245,240,232,0.1)', background: 'rgba(245,240,232,0.03)' }}>
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(245,240,232,0.3)', marginBottom: 6 }}>Charlie Mulan</div>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, fontWeight: 300, color: '#F5F0E8', marginBottom: 4 }}>Charlie&apos;s Circle</div>
-            <div style={{ fontSize: 12, color: 'rgba(245,240,232,0.35)', marginBottom: 40 }}>Season 1 · Creators of New Earth</div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(245,240,232,0.4)', marginBottom: 8 }}>Email</label>
-              <input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} style={{ width: '100%', background: 'rgba(245,240,232,0.06)', border: '1px solid rgba(245,240,232,0.12)', color: '#F5F0E8', fontFamily: 'DM Sans, sans-serif', fontSize: 13, padding: '12px 14px', outline: 'none' }} placeholder="your@email.com" />
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(245,240,232,0.4)', marginBottom: 8 }}>Password</label>
-              <input type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} style={{ width: '100%', background: 'rgba(245,240,232,0.06)', border: '1px solid rgba(245,240,232,0.12)', color: '#F5F0E8', fontFamily: 'DM Sans, sans-serif', fontSize: 13, padding: '12px 14px', outline: 'none' }} placeholder="••••••••" />
-            </div>
-            <button onClick={handleLogin} disabled={loginLoading} style={{ width: '100%', background: '#C8813A', color: '#1A1612', fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 500, padding: 14, border: 'none', cursor: loginLoading ? 'not-allowed' : 'pointer', opacity: loginLoading ? 0.6 : 1, marginTop: 8 }}>
-              {loginLoading ? 'Entering...' : 'Enter the Circle'}
-            </button>
-            {loginError && <div style={{ fontSize: 11, color: '#E8A0A0', marginTop: 12, textAlign: 'center' }}>{loginError}</div>}
-          </div>
-        </div>
-      </>
-    )
-  }
+  const pageTitles = { home: "Member Home", deliverables: "My Deliverables", opportunities: "Opportunities", community: "The Room", messages: "Messages", profile: "My Profile" };
 
   return (
     <>
-      <Head><title>Charlie&apos;s Circle — {currentMember?.name || 'Portal'}</title></Head>
-      <style>{globalStyles}</style>
-      <div style={{ display: 'flex', minHeight: '100vh' }}>
-        <aside style={{ width: 260, minHeight: '100vh', background: 'var(--ink)', display: 'flex', flexDirection: 'column', position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 100 }}>
-          <div style={{ padding: '32px 28px 24px', borderBottom: '1px solid rgba(245,240,232,0.08)' }}>
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(245,240,232,0.4)', marginBottom: 4 }}>Charlie Mulan</div>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 22, color: '#F5F0E8' }}>Charlie&apos;s Circle</div>
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#C8813A', marginTop: 6 }}>Season 1 · Creators of New Earth</div>
+      <style>{css}</style>
+      <div className="portal-root">
+        <aside className="sidebar">
+          <div className="sidebar-logo">
+            <div className="sidebar-agency">Charlie Mulan</div>
+            <div className="sidebar-circle">Charlie's Circle</div>
+            <div className="sidebar-season">Season 1 · Creators of New Earth</div>
           </div>
-          <div style={{ padding: '24px 28px', borderBottom: '1px solid rgba(245,240,232,0.08)' }}>
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#C8813A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Cormorant Garamond, serif', fontSize: 18, fontWeight: 500, color: '#1A1612', marginBottom: 12 }}>{getInitial(currentMember?.name)}</div>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 16, color: '#F5F0E8', marginBottom: 3 }}>{currentMember?.name || '—'}</div>
-            <div style={{ fontSize: 11, color: 'rgba(245,240,232,0.45)', lineHeight: 1.4 }}>{currentMember?.brand ? currentMember.brand + ' · ' : ''}{currentMember?.building_short || ''}</div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', marginTop: 10, background: 'rgba(200,129,58,0.15)', border: '1px solid rgba(200,129,58,0.3)', padding: '4px 10px', borderRadius: 2 }}>
-              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#C8813A' }}>{currentMember?.tier || 'Member'}</span>
-            </div>
+          <div className="sidebar-member">
+            <div className="member-av">{MEMBER.initials}</div>
+            <div className="member-nm">{MEMBER.name}</div>
+            <div className="member-bld">Building a creative consultancy for independent musicians</div>
+            <div className="member-badge">Founding Member</div>
           </div>
-          <nav style={{ flex: 1, padding: '20px 0', overflowY: 'auto' }}>
-            {isAdmin && (
-              <>
-                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(245,240,232,0.2)', padding: '16px 28px 8px' }}>Admin</div>
-                <NavItem label="Admin Dashboard" active={activePage === 'admin-home'} onClick={() => setActivePage('admin-home')} />
-              </>
-            )}
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(245,240,232,0.2)', padding: '16px 28px 8px' }}>My Portal</div>
-            <NavItem label="Home" active={activePage === 'home'} onClick={() => setActivePage('home')} />
-            <NavItem label="My Deliverables" active={activePage === 'deliverables'} onClick={() => setActivePage('deliverables')} badge={deliverables.length || null} />
-            <NavItem label="Opportunities" active={activePage === 'opportunities'} onClick={() => setActivePage('opportunities')} badge={opportunities.length || null} />
-            <NavItem label="The Room" active={activePage === 'community'} onClick={() => setActivePage('community')} />
-            <NavItem label="Messages" active={activePage === 'messages'} onClick={() => setActivePage('messages')} badge={unreadMessages || null} />
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(245,240,232,0.2)', padding: '16px 28px 8px', marginTop: 8 }}>My Work</div>
-            <NavItem label="My Profile" active={activePage === 'profile'} onClick={() => setActivePage('profile')} />
-            {!isAdmin && <NavItem label="Submit Files" active={activePage === 'submit'} onClick={() => setActivePage('submit')} />}
+          <nav className="sidebar-nav">
+            <div className="nav-section">My Portal</div>
+            {navItems.map(n => (
+              <button key={n.id} className={`nav-item${page === n.id ? " active" : ""}`} onClick={() => setPage(n.id)}>
+                <span style={{opacity: page === n.id ? 1 : 0.45, color: page === n.id ? "#F5F0E8" : "rgba(245,240,232,0.5)", flexShrink:0}}>{n.icon}</span>
+                <span className="nav-lbl">{n.label}</span>
+                {n.badge && <span className="nav-badge-pill">{n.badge}</span>}
+              </button>
+            ))}
+            <div className="nav-section" style={{marginTop:8}}>My Work</div>
+            <button className={`nav-item${page === "profile" ? " active" : ""}`} onClick={() => setPage("profile")}>
+              <span style={{opacity: page === "profile" ? 1 : 0.45, color:"rgba(245,240,232,0.5)", flexShrink:0}}>{icons.profile}</span>
+              <span className="nav-lbl">My Profile</span>
+            </button>
+            <div className="nav-section" style={{marginTop:8}}>Intelligence</div>
+            <button className={`nav-item agent-trigger${agentOpen ? " agent-on" : ""}`} onClick={() => setAgentOpen(o => !o)}>
+              <span style={{flexShrink:0}}>{icons.agent}</span>
+              <span className="nav-lbl">Circle Intelligence</span>
+              <div className="pulse-dot"></div>
+            </button>
           </nav>
-          <div style={{ padding: '20px 28px', borderTop: '1px solid rgba(245,240,232,0.08)' }}>
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(245,240,232,0.25)', marginBottom: 6 }}>Next Session</div>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 14, color: 'rgba(245,240,232,0.7)' }}>{currentMember?.session_short || '—'}</div>
+          <div className="sidebar-bottom">
+            <div className="next-lbl">Next Session</div>
+            <div className="next-date">May 14 · 2:00 PM EST</div>
           </div>
         </aside>
 
-        <main style={{ marginLeft: 260, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 48px', borderBottom: '1px solid var(--rule)', background: 'var(--paper)', position: 'sticky', top: 0, zIndex: 50 }}>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 13, color: 'var(--ink-light)', letterSpacing: '0.05em' }}>{pageTitle(activePage)}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, letterSpacing: '0.1em', color: 'var(--ink-light)' }}>{today}</div>
-              {isAdmin && <button onClick={() => { setShowAdmin(true); loadAdminData(currentMember?.id) }} style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', padding: '8px 16px', border: '1px solid rgba(200,129,58,0.4)', background: 'transparent', color: '#C8813A', cursor: 'pointer' }}>Admin Panel</button>}
-              <button onClick={handleLogout} style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', padding: '8px 16px', border: '1px solid var(--rule)', background: 'transparent', color: 'var(--ink-light)', cursor: 'pointer' }}>Sign Out</button>
+        <main className={`main-content${agentOpen ? " agent-open" : ""}`}>
+          <div className="topbar">
+            <div className="topbar-title">{pageTitles[page]}</div>
+            <div className="topbar-right">
+              <div className="topbar-date">May 11, 2026</div>
+              <button className="notif-btn">
+                <div className="notif-dot"></div>
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                  <path d="M7 1C7 1 3 3 3 7V10L1.5 11.5H12.5L11 10V7C11 3 7 1 7 1Z" stroke="#7A6E62" strokeWidth="1" fill="none"/>
+                  <path d="M5.5 11.5C5.5 12.3 6.2 13 7 13C7.8 13 8.5 12.3 8.5 11.5" stroke="#7A6E62" strokeWidth="1"/>
+                </svg>
+              </button>
             </div>
           </div>
 
-          <div style={{ padding: 48, flex: 1, overflowY: 'auto', minHeight: 'calc(100vh - 69px)' }}>
-
-            {activePage === 'home' && (
+          <div className="page-content">
+            {page === "home" && (
               <div>
-                <div style={{ marginBottom: 48 }}>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 10 }}>Good morning</div>
-                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 42, fontWeight: 300, lineHeight: 1.1, color: 'var(--ink)', marginBottom: 16 }}>Welcome back,<br /><em style={{ fontStyle: 'italic', color: 'var(--ink-mid)' }}>{firstName}.</em></div>
-                  <div style={{ fontSize: 13, color: 'var(--ink-light)', maxWidth: 520, lineHeight: 1.7 }}>Your work is in motion. Here is where it lives, grows, and gets the support it deserves.</div>
+                <div className="welcome">
+                  <div className="eyebrow">Good morning</div>
+                  <div className="page-heading">Welcome back,<br/><em>Nia.</em></div>
+                  <div className="page-sub">Your creative work is in motion. Here is where it lives, grows, and gets the support it deserves.</div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--rule)', border: '1px solid var(--rule)', marginBottom: 40 }}>
+                <div className="stats-row">
                   {[
-                    { label: 'Member Since', value: currentMember?.member_since || '—', sub: 'Season 1 · ' + (currentMember?.tier || 'Member') },
-                    { label: 'Sessions Completed', value: currentMember?.sessions_completed || '0', sub: 'Next: ' + (currentMember?.session_short || '—') },
-                    { label: 'Deliverables', value: deliverables.length, sub: newDelCount > 0 ? `${newDelCount} new this week` : 'Up to date' },
-                    { label: 'Messages', value: messages.length, sub: unreadMessages > 0 ? `${unreadMessages} from agency` : 'Up to date' }
-                  ].map((s, i) => (
-                    <div key={i} style={{ background: 'var(--paper)', padding: '24px 28px' }}>
-                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-light)', marginBottom: 10 }}>{s.label}</div>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: i === 0 ? 22 : 32, color: 'var(--ink)', lineHeight: 1, marginBottom: 4 }}>{s.value}</div>
-                      <div style={{ fontSize: 11, color: 'var(--ink-light)' }}>{s.sub}</div>
+                    {lbl:"Member Since",val:"April 2026",sub:"Season 1 · Founding",sm:true},
+                    {lbl:"Sessions Completed",val:"2",sub:"Next: May 14"},
+                    {lbl:"Deliverables",val:"4",sub:"2 new this week"},
+                    {lbl:"Opportunities",val:"5",sub:"Curated this week"},
+                  ].map((s,i) => (
+                    <div className="stat-card" key={i}>
+                      <div className="stat-lbl">{s.lbl}</div>
+                      <div className="stat-val" style={s.sm?{fontSize:18,marginTop:4}:{}}>{s.val}</div>
+                      <div className="stat-sub">{s.sub}</div>
                     </div>
                   ))}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                <div className="two-col">
                   <div>
-                    <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)', marginBottom: 24 }}>
-                      <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--rule)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-mid)' }}>Recent Deliverables</span>
-                        <button style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#C8813A', cursor: 'pointer', border: 'none', background: 'none' }} onClick={() => setActivePage('deliverables')}>View All</button>
+                    <div className="panel" style={{marginBottom:20}}>
+                      <div className="panel-hd">
+                        <span className="panel-ttl">Recent Deliverables</span>
+                        <button className="panel-act" onClick={() => setPage("deliverables")}>View All</button>
                       </div>
-                      <div style={{ padding: 24 }}>
-                        {deliverables.slice(0, 3).map(d => <DeliverableRow key={d.id} d={d} />)}
-                        {deliverables.length === 0 && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)', padding: '20px 0', textAlign: 'center' }}>No deliverables yet.</div>}
-                      </div>
-                    </div>
-                    <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
-                      <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--rule)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-mid)' }}>This Week&apos;s Opportunities</span>
-                        <button style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#C8813A', cursor: 'pointer', border: 'none', background: 'none' }} onClick={() => setActivePage('opportunities')}>View All</button>
-                      </div>
-                      <div style={{ padding: 24 }}>
-                        {opportunities.slice(0, 2).map(o => <OppRow key={o.id} o={o} />)}
-                        {opportunities.length === 0 && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)', padding: '20px 0', textAlign: 'center' }}>No opportunities.</div>}
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ background: 'var(--ink)', padding: 28, display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
-                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(245,240,232,0.3)' }}>Next Strategy Session</div>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 24, fontWeight: 300, color: '#F5F0E8', lineHeight: 1.2 }}>{currentMember?.session_title || 'Strategy Session'}</div>
-                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: '#C8813A', letterSpacing: '0.08em' }}>{currentMember?.session_date || '—'}</div>
-                      <div style={{ fontSize: 11, color: 'rgba(245,240,232,0.35)', lineHeight: 1.6, borderTop: '1px solid rgba(245,240,232,0.08)', paddingTop: 16 }}>{currentMember?.session_prep || 'Come with your current focus areas.'}</div>
-                    </div>
-                    <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
-                      <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--rule)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-mid)' }}>Messages</span>
-                        <button style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#C8813A', cursor: 'pointer', border: 'none', background: 'none' }} onClick={() => setActivePage('messages')}>Open Chat</button>
-                      </div>
-                      <div style={{ padding: 24 }}>
-                        {messages.slice(-3).map((m, i) => (
-                          <div key={m.id} style={{ padding: '10px 0', borderBottom: i < 2 ? '1px solid var(--rule)' : 'none' }}>
-                            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, color: m.is_reply ? '#7BAE7F' : '#C8813A', marginBottom: 4 }}>{m.sender_name}</div>
-                            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 14, color: 'var(--ink)', lineHeight: 1.4 }}>{(m.body || '').substring(0, 60)}{m.body?.length > 60 ? '...' : ''}</div>
+                      <div className="panel-bd">
+                        {MEMBER.deliverables.slice(0,3).map((d,i) => (
+                          <div className="del-item" key={i}>
+                            <div className={`del-icon${d.isNew?" new":""}`}>{d.type}</div>
+                            <div className="del-info">
+                              <div className="del-name">{d.name}</div>
+                              <div className="del-meta">{d.meta}</div>
+                            </div>
+                            {d.isNew && <div className="del-new">New</div>}
                           </div>
                         ))}
-                        {messages.length === 0 && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)', padding: '20px 0', textAlign: 'center' }}>No messages yet.</div>}
+                      </div>
+                    </div>
+                    <div className="panel">
+                      <div className="panel-hd">
+                        <span className="panel-ttl">This Week's Opportunities</span>
+                        <button className="panel-act" onClick={() => setPage("opportunities")}>View All</button>
+                      </div>
+                      <div className="panel-bd">
+                        {MEMBER.opportunities.slice(0,2).map((o,i) => (
+                          <div className="opp-item" key={i}>
+                            <div className="opp-tag">{o.tag}</div>
+                            <div className="opp-title">{o.title}</div>
+                            <div className="opp-detail">{o.detail}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="session-block">
+                      <div className="session-lbl">Next Strategy Session</div>
+                      <div className="session-title">Monthly Strategy + Project Management</div>
+                      <div className="session-dt">Wednesday, May 14 · 2:00 PM EST · 60 min</div>
+                      <div>
+                        <button className="session-btn" onClick={() => { setAgentOpen(true); setTimeout(() => sendMessage("Help me prepare for my strategy session on May 14. What should I come ready to discuss?"), 350); }}>
+                          Prepare for Session →
+                        </button>
+                      </div>
+                      <div className="session-prep">Come with your current project focus and your most pressing question. The session is yours.</div>
+                    </div>
+                    <div className="panel">
+                      <div className="panel-hd">
+                        <span className="panel-ttl">The Room</span>
+                        <button className="panel-act" onClick={() => setPage("community")}>View All</button>
+                      </div>
+                      <div className="panel-bd">
+                        {MEMBER.roomMessages.map((m,i) => (
+                          <div className="chat-item" key={i}>
+                            <div className="chat-av" style={{background:m.bg,color:"#1A1612"}}>{m.initial}</div>
+                            <div className="chat-body">
+                              <div className="chat-nm">{m.name}</div>
+                              <div className="chat-msg">{m.text}</div>
+                            </div>
+                            <div className="chat-time">{m.time}</div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -508,411 +465,231 @@ export default function Portal() {
               </div>
             )}
 
-            {activePage === 'admin-home' && (
+            {page === "deliverables" && (
               <div>
-                <div style={{ marginBottom: 48 }}>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 10 }}>Agency Overview</div>
-                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 42, fontWeight: 300, lineHeight: 1.1, color: 'var(--ink)', marginBottom: 16 }}>Charlie&apos;s <em style={{ fontStyle: 'italic', color: 'var(--ink-mid)' }}>Circle</em></div>
-                  <div style={{ fontSize: 13, color: 'var(--ink-light)', maxWidth: 520, lineHeight: 1.7 }}>Season 1 at a glance.</div>
+                <div className="welcome">
+                  <div className="eyebrow">Your Archive</div>
+                  <div className="page-heading" style={{fontSize:30}}>My <em>Deliverables</em></div>
+                  <div className="page-sub">Everything produced for your work, in one place.</div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-                  <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
-                    <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--rule)' }}>
-                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-mid)' }}>Active Members · Season 1</span>
-                    </div>
-                    <div style={{ padding: 24 }}>
-                      {allMembers.map((m, i) => (
-                        <div key={m.id} onClick={() => switchMember(m)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: i < allMembers.length - 1 ? '1px solid var(--rule)' : 'none', cursor: 'pointer' }}>
-                          <div style={{ width: 40, height: 40, borderRadius: '50%', background: AVATAR_COLORS[i % AVATAR_COLORS.length], display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Cormorant Garamond, serif', fontSize: 16, fontWeight: 500, color: 'var(--ink)', flexShrink: 0 }}>{getInitial(m.name)}</div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 2 }}>{m.name}{m.brand ? ' · ' + m.brand : ''}</div>
-                            <div style={{ fontSize: 11, color: 'var(--ink-light)' }}>{m.retainer || '—'} · {m.tier || 'Member'}</div>
+                <div className="panel">
+                  <div className="tab-bar">
+                    {["All","Strategy","Session Notes","Frameworks"].map((t,i) => (
+                      <button key={t} className={`tab-item${i===0?" active":""}`}>{t}</button>
+                    ))}
+                  </div>
+                  <div className="panel-bd">
+                    {MEMBER.deliverables.map((d,i) => (
+                      <div className="del-item" key={i}>
+                        <div className={`del-icon${d.isNew?" new":""}`}>{d.type}</div>
+                        <div className="del-info">
+                          <div className="del-name">{d.name}</div>
+                          <div className="del-meta">{d.meta}</div>
+                        </div>
+                        {d.isNew && <div className="del-new">New</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {page === "opportunities" && (
+              <div>
+                <div className="welcome">
+                  <div className="eyebrow">Curated for You</div>
+                  <div className="page-heading" style={{fontSize:30}}><em>Opportunities</em></div>
+                  <div className="page-sub">Researched weekly. Aligned to your industry and mission.</div>
+                </div>
+                <div className="panel">
+                  <div className="panel-hd"><span className="panel-ttl">Week of May 5, 2026 · 5 Opportunities</span></div>
+                  <div className="panel-bd">
+                    {MEMBER.opportunities.map((o,i) => (
+                      <div className="opp-item" key={i}>
+                        <div className="opp-tag">{o.tag}</div>
+                        <div className="opp-title">{o.title}</div>
+                        <div className="opp-detail">{o.detail}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {page === "community" && (
+              <div>
+                <div className="welcome">
+                  <div className="eyebrow">Season 1</div>
+                  <div className="page-heading" style={{fontSize:30}}><em>The Room</em></div>
+                  <div className="page-sub">The people building alongside you. This is your network.</div>
+                </div>
+                <div className="two-col">
+                  <div className="panel">
+                    <div className="panel-hd"><span className="panel-ttl">Founders · Season 1</span></div>
+                    <div className="panel-bd">
+                      {MEMBER.roomMembers.map((m,i) => (
+                        <div className="mem-item" key={i}>
+                          <div className="mem-dot" style={{background:m.bg,color:"#1A1612"}}>{m.initial}</div>
+                          <div className="mem-info">
+                            <div className="mem-name">{m.name}</div>
+                            <div className="mem-work">{m.work}</div>
                           </div>
-                          <div onClick={e => { e.stopPropagation(); switchMember(m); setShowAdmin(true); loadAdminData(m.id) }} style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#C8813A', border: '1px solid rgba(200,129,58,0.3)', padding: '4px 10px', cursor: 'pointer' }}>Edit</div>
+                          {m.online ? <div className="online-dot"/> : <div className="offline-dot"/>}
                         </div>
                       ))}
-                      <div onClick={() => setShowAddMember(true)} style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#C8813A', border: '1px dashed rgba(200,129,58,0.4)', padding: '12px 20px', textAlign: 'center', marginTop: 16, cursor: 'pointer' }}>+ Add New Member</div>
                     </div>
                   </div>
-                  <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
-                    <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--rule)' }}>
-                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-mid)' }}>Message · {currentMember?.name || '—'}</span>
+                  <div className="panel">
+                    <div className="panel-hd">
+                      <span className="panel-ttl">Recent Conversation</span>
+                      <button className="panel-act">Open Chat</button>
                     </div>
-                    <div style={{ padding: 24 }}>
-                      <MessageThread msgs={adminMessages} memberId={currentMember?.id} isAdminView={true} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activePage === 'messages' && (
-              <div>
-                <div style={{ marginBottom: 48 }}>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 10 }}>Direct</div>
-                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, fontWeight: 300, color: 'var(--ink)', marginBottom: 16 }}><em style={{ fontStyle: 'italic' }}>Messages</em></div>
-                  <div style={{ fontSize: 13, color: 'var(--ink-light)', maxWidth: 520, lineHeight: 1.7 }}>Your direct line to Charlie Mulan.</div>
-                </div>
-                <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
-                  <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--rule)' }}>
-                    <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-mid)' }}>Conversation with Charlie Mulan</span>
-                  </div>
-                  <div style={{ padding: 24 }}>
-                    <MessageThread msgs={messages} memberId={currentMember?.id} isAdminView={false} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activePage === 'deliverables' && (
-              <div>
-                <div style={{ marginBottom: 48 }}>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 10 }}>Your Archive</div>
-                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, fontWeight: 300, color: 'var(--ink)', marginBottom: 16 }}>My <em style={{ fontStyle: 'italic' }}>Deliverables</em></div>
-                </div>
-                <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
-                  <div style={{ padding: 24 }}>
-                    {deliverables.map(d => <DeliverableRow key={d.id} d={d} />)}
-                    {deliverables.length === 0 && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)', padding: '20px 0', textAlign: 'center' }}>No deliverables yet.</div>}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activePage === 'opportunities' && (
-              <div>
-                <div style={{ marginBottom: 48 }}>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 10 }}>Curated for You</div>
-                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, fontWeight: 300, color: 'var(--ink)', marginBottom: 16 }}><em style={{ fontStyle: 'italic' }}>Opportunities</em></div>
-                </div>
-                <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
-                  <div style={{ padding: 24 }}>
-                    {opportunities.map(o => <OppRow key={o.id} o={o} />)}
-                    {opportunities.length === 0 && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)', padding: '20px 0', textAlign: 'center' }}>No opportunities this week.</div>}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activePage === 'community' && (
-              <div>
-                <div style={{ marginBottom: 48 }}>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 10 }}>Season 1</div>
-                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, fontWeight: 300, color: 'var(--ink)', marginBottom: 16 }}><em style={{ fontStyle: 'italic' }}>The Room</em></div>
-                  <div style={{ fontSize: 13, color: 'var(--ink-light)', maxWidth: 520, lineHeight: 1.7 }}>The people building alongside you.</div>
-                </div>
-                <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
-                  <div style={{ padding: 24 }}>
-                    {communityMembers.map((m, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: i < communityMembers.length - 1 ? '1px solid var(--rule)' : 'none' }}>
-                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: AVATAR_COLORS[i % AVATAR_COLORS.length], display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Cormorant Garamond, serif', fontSize: 15, fontWeight: 500, color: 'var(--ink)', flexShrink: 0 }}>{getInitial(m.name)}</div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 2 }}>{m.name}{m.brand ? ' · ' + m.brand : ''}</div>
-                          <div style={{ fontSize: 11, color: 'var(--ink-light)' }}>{m.building_short}</div>
+                    <div className="panel-bd">
+                      {MEMBER.roomMessages.map((m,i) => (
+                        <div className="chat-item" key={i}>
+                          <div className="chat-av" style={{background:m.bg,color:"#1A1612"}}>{m.initial}</div>
+                          <div className="chat-body">
+                            <div className="chat-nm">{m.name}</div>
+                            <div className="chat-msg">{m.text}</div>
+                          </div>
+                          <div className="chat-time">{m.time}</div>
                         </div>
-                        <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#7BAE7F' }} />
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {activePage === 'profile' && (
+            {page === "profile" && (
               <div>
-                <div style={{ marginBottom: 48 }}>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 10 }}>Your Identity</div>
-                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, fontWeight: 300, color: 'var(--ink)', marginBottom: 16 }}>My <em style={{ fontStyle: 'italic' }}>Profile</em></div>
+                <div className="welcome">
+                  <div className="eyebrow">Your Identity</div>
+                  <div className="page-heading" style={{fontSize:30}}>My <em>Profile</em></div>
                 </div>
-                <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 28, padding: 32, borderBottom: '1px solid var(--rule)' }}>
-                    <div style={{ width: 72, height: 72, borderRadius: '50%', background: '#C8813A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Cormorant Garamond, serif', fontSize: 28, fontWeight: 500, color: '#1A1612', flexShrink: 0 }}>{getInitial(currentMember?.name)}</div>
+                <div className="panel">
+                  <div className="profile-identity">
+                    <div className="profile-av">{MEMBER.initials}</div>
                     <div>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 28, color: 'var(--ink)', marginBottom: 4 }}>{currentMember?.name || '—'}</div>
-                      <div style={{ fontSize: 13, color: 'var(--ink-light)', marginBottom: 12 }}>{currentMember?.discipline || '—'}</div>
-                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--ink-light)', marginBottom: 5 }}>Currently Building</div>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 16, fontStyle: 'italic', color: 'var(--ink-mid)', lineHeight: 1.4 }}>{currentMember?.building_full || '—'}</div>
+                      <div className="profile-nm">{MEMBER.name}</div>
+                      <div className="profile-disc">{MEMBER.discipline}</div>
+                      <div className="profile-bld-lbl">Currently Building</div>
+                      <div className="profile-bld">{MEMBER.building}</div>
                     </div>
                   </div>
-                  <div style={{ padding: 32, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 32 }}>
-                    {[
-                      { label: 'Member Since', value: currentMember?.member_since, sub: 'Season 1 · ' + (currentMember?.tier || 'Member') },
-                      { label: 'Industry', value: currentMember?.industry },
-                      { label: 'Location', value: currentMember?.location }
-                    ].map((s, i) => (
-                      <div key={i}>
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-light)', marginBottom: 10 }}>{s.label}</div>
-                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 18, color: 'var(--ink)' }}>{s.value || '—'}</div>
-                        {s.sub && <div style={{ fontSize: 11, color: 'var(--ink-light)', marginTop: 3 }}>{s.sub}</div>}
+                  <div className="panel-bd">
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:28}}>
+                      {[
+                        {lbl:"Member Since",val:"April 2026",sub:"Season 1 · Founding Member"},
+                        {lbl:"Industry",val:"Music + Creative"},
+                        {lbl:"Location",val:"Atlanta, GA"},
+                      ].map((s,i) => (
+                        <div key={i}>
+                          <div className="stat-lbl" style={{marginBottom:6}}>{s.lbl}</div>
+                          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:"var(--ink)"}}>{s.val}</div>
+                          {s.sub && <div style={{fontSize:10,color:"var(--ink-light)",marginTop:2}}>{s.sub}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {page === "messages" && (
+              <div>
+                <div className="welcome">
+                  <div className="eyebrow">Direct</div>
+                  <div className="page-heading" style={{fontSize:30}}><em>Messages</em></div>
+                </div>
+                <div className="panel">
+                  <div className="panel-bd">
+                    {MEMBER.messages.map((m,i) => (
+                      <div className="chat-item" key={i}>
+                        <div className="chat-av" style={{background:m.bg,color:"#1A1612",width:36,height:36,fontSize:12}}>{m.initial}</div>
+                        <div className="chat-body">
+                          <div className="chat-nm">{m.name}</div>
+                          <div className="chat-msg">{m.text}</div>
+                        </div>
+                        <div className="chat-time">{m.time}</div>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
             )}
-
-            {activePage === 'submit' && (
-              <div>
-                <div style={{ marginBottom: 48 }}>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 10 }}>Your Submissions</div>
-                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, fontWeight: 300, color: 'var(--ink)', marginBottom: 16 }}><em style={{ fontStyle: 'italic' }}>Submit</em> Files</div>
-                  <div style={{ fontSize: 13, color: 'var(--ink-light)', maxWidth: 520, lineHeight: 1.7 }}>Upload files requested by your Charlie Mulan team.</div>
-                </div>
-                <div style={{ border: '1px solid var(--rule)', background: 'var(--paper)' }}>
-                  <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--rule)' }}>
-                    <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-mid)' }}>Upload a File</span>
-                  </div>
-                  <div style={{ padding: 24 }}>
-                    <div style={{ marginBottom: 16 }}>
-                      <label style={{ display: 'block', fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-light)', marginBottom: 8 }}>File Description</label>
-                      <input value={uploadDesc} onChange={e => setUploadDesc(e.target.value)} style={{ width: '100%', background: 'var(--paper-dark)', border: '1px solid var(--rule)', color: 'var(--ink)', fontFamily: 'DM Sans, sans-serif', fontSize: 13, fontWeight: 300, padding: '10px 14px', outline: 'none' }} placeholder="e.g. Brand photos" />
-                    </div>
-                    <div style={{ marginBottom: 16 }}>
-                      <label style={{ display: 'block', fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-light)', marginBottom: 8 }}>Notes (optional)</label>
-                      <textarea value={uploadNotes} onChange={e => setUploadNotes(e.target.value)} style={{ width: '100%', background: 'var(--paper-dark)', border: '1px solid var(--rule)', color: 'var(--ink)', fontFamily: 'DM Sans, sans-serif', fontSize: 13, fontWeight: 300, padding: '10px 14px', outline: 'none', minHeight: 80, resize: 'vertical' }} placeholder="Any context..." />
-                    </div>
-                    <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
-                    <div onClick={() => fileInputRef.current?.click()} style={{ border: '1px dashed rgba(200,129,58,0.3)', padding: 32, textAlign: 'center', cursor: 'pointer' }}>
-                      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 18, color: 'var(--ink)', marginBottom: 6 }}>Drop a file or click to browse</div>
-                      <div style={{ fontSize: 11, color: 'var(--ink-light)', marginBottom: 16 }}>PDF, DOC, JPG, PNG — max 50MB</div>
-                      <div style={{ display: 'inline-block', fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', background: '#C8813A', color: '#1A1612', padding: '10px 20px', fontWeight: 500 }}>Choose File</div>
-                    </div>
-                    {uploadStatus === 'uploading' && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)', marginTop: 12 }}>Uploading...</div>}
-                    {uploadStatus === 'success' && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, padding: '10px 14px', marginTop: 12, background: 'rgba(123,174,127,0.1)', color: '#4a8a4f', border: '1px solid rgba(123,174,127,0.3)' }}>Uploaded successfully.</div>}
-                    {uploadStatus === 'error' && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, padding: '10px 14px', marginTop: 12, background: 'rgba(192,57,43,0.1)', color: '#C0392B', border: '1px solid rgba(192,57,43,0.3)' }}>Upload failed. Please try again.</div>}
-                  </div>
-                </div>
-              </div>
-            )}
-
           </div>
         </main>
-      </div>
 
-      {showAdmin && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(26,22,18,0.85)', zIndex: 500, overflowY: 'auto' }}>
-          <div style={{ background: 'var(--paper)', width: 720, maxWidth: '95vw', margin: '40px auto', border: '1px solid var(--rule)' }}>
-            <div style={{ background: 'var(--ink)', padding: '28px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <aside className={`agent-panel${agentOpen ? " open" : ""}`}>
+          <div className="agent-hd">
+            <div className="agent-hd-top">
               <div>
-                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 4 }}>Charlie Mulan · Admin</div>
-                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 24, color: '#F5F0E8' }}>Portal Management</div>
+                <div className="agent-eyebrow">Charlie Mulan</div>
+                <div className="agent-name-display">Circle <em>Intelligence</em></div>
+                <div className="agent-status-row">
+                  <div className="agent-status-dot"></div>
+                  <div className="agent-status-txt">Active · Season 1</div>
+                </div>
               </div>
-              <button onClick={() => setShowAdmin(false)} style={{ width: 36, height: 36, border: '1px solid rgba(245,240,232,0.2)', background: 'transparent', color: 'rgba(245,240,232,0.6)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+              <button className="agent-close-btn" onClick={() => setAgentOpen(false)}>✕</button>
             </div>
-            <div style={{ padding: '20px 32px', borderBottom: '1px solid var(--rule)' }}>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-light)', marginBottom: 10 }}>Viewing Member</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                {allMembers.map(m => (
-                  <button key={m.id} onClick={() => { switchMember(m); loadAdminData(m.id) }} style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '8px 16px', border: currentMember?.id === m.id ? '1px solid #C8813A' : '1px solid var(--rule)', background: currentMember?.id === m.id ? 'rgba(200,129,58,0.08)' : 'transparent', color: currentMember?.id === m.id ? '#C8813A' : 'var(--ink-light)', cursor: 'pointer' }}>{m.name}{m.brand ? ' · ' + m.brand : ''}</button>
+          </div>
+          {!started && (
+            <div className="agent-chips-wrap">
+              <div className="chips-lbl">Ask about your work</div>
+              <div className="chips-grid">
+                {PROMPT_CHIPS.map((c,i) => (
+                  <button key={i} className="chip" onClick={() => triggerPrompt(c.prompt)}>{c.label}</button>
                 ))}
-                <button onClick={() => setShowAddMember(true)} style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#C8813A', background: 'transparent', border: '1px dashed rgba(200,129,58,0.4)', padding: '6px 14px', cursor: 'pointer' }}>+ Add Member</button>
               </div>
             </div>
-            <div style={{ display: 'flex', borderBottom: '1px solid var(--rule)', padding: '0 32px', overflowX: 'auto' }}>
-              {['member', 'session', 'deliverables', 'opportunities', 'messages', 'requests'].map(t => (
-                <div key={t} onClick={() => setAdminTab(t)} style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: adminTab === t ? 'var(--ink)' : 'var(--ink-light)', padding: '14px 0', marginRight: 28, cursor: 'pointer', borderBottom: adminTab === t ? '2px solid #C8813A' : '2px solid transparent', whiteSpace: 'nowrap' }}>{t === 'member' ? 'Member Info' : t.charAt(0).toUpperCase() + t.slice(1)}</div>
-              ))}
-            </div>
-            <div style={{ padding: 32 }}>
-              {adminTab === 'member' && (
-                <div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                    <FormField label="Full Name" value={aForm.name || ''} onChange={v => setAForm(f => ({ ...f, name: v }))} />
-                    <FormField label="Email" value={aForm.email || ''} onChange={v => setAForm(f => ({ ...f, email: v }))} />
-                  </div>
-                  <FormField label="Brand / Company" value={aForm.brand || ''} onChange={v => setAForm(f => ({ ...f, brand: v }))} style={{ marginBottom: 16 }} />
-                  <FormField label="Building (sidebar)" value={aForm.building_short || ''} onChange={v => setAForm(f => ({ ...f, building_short: v }))} style={{ marginBottom: 16 }} />
-                  <FormField label="Currently Building (full)" value={aForm.building_full || ''} onChange={v => setAForm(f => ({ ...f, building_full: v }))} textarea style={{ marginBottom: 16 }} />
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                    <FormField label="Discipline" value={aForm.discipline || ''} onChange={v => setAForm(f => ({ ...f, discipline: v }))} />
-                    <FormField label="Industry" value={aForm.industry || ''} onChange={v => setAForm(f => ({ ...f, industry: v }))} />
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                    <FormField label="Location" value={aForm.location || ''} onChange={v => setAForm(f => ({ ...f, location: v }))} />
-                    <FormField label="Member Since" value={aForm.member_since || ''} onChange={v => setAForm(f => ({ ...f, member_since: v }))} />
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
-                    <FormField label="Tier" value={aForm.tier || ''} onChange={v => setAForm(f => ({ ...f, tier: v }))} />
-                    <FormField label="Sessions Completed" value={aForm.sessions_completed || ''} onChange={v => setAForm(f => ({ ...f, sessions_completed: v }))} type="number" />
-                    <FormField label="Retainer" value={aForm.retainer || ''} onChange={v => setAForm(f => ({ ...f, retainer: v }))} />
-                  </div>
-                  <button onClick={saveMemberInfo} style={{ background: '#C8813A', color: '#1A1612', fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500, padding: '12px 24px', border: 'none', cursor: 'pointer' }}>Save All Changes</button>
-                  <StatusMsg id="member" />
+          )}
+          <div className="agent-msgs">
+            {!started && (
+              <div className="agent-empty">
+                <div className="empty-glyph">◎</div>
+                <div className="empty-txt">Your creative intelligence is ready. Ask anything about your work, your opportunities, or your next move.</div>
+              </div>
+            )}
+            {messages.map((m,i) => (
+              <div className="msg-wrap" key={i}>
+                <div className={`msg-from ${m.role === "assistant" ? "agent" : "user"}`}>
+                  {m.role === "assistant" ? "Circle Intelligence" : "Nia"}
                 </div>
-              )}
-              {adminTab === 'session' && (
-                <div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                    <FormField label="Session Title" value={aForm.session_title || ''} onChange={v => setAForm(f => ({ ...f, session_title: v }))} />
-                    <FormField label="Session Short (sidebar)" value={aForm.session_short || ''} onChange={v => setAForm(f => ({ ...f, session_short: v }))} />
-                  </div>
-                  <FormField label="Session Date Display" value={aForm.session_date || ''} onChange={v => setAForm(f => ({ ...f, session_date: v }))} style={{ marginBottom: 16 }} />
-                  <FormField label="Session Prep Note" value={aForm.session_prep || ''} onChange={v => setAForm(f => ({ ...f, session_prep: v }))} textarea style={{ marginBottom: 16 }} />
-                  <button onClick={saveMemberInfo} style={{ background: '#C8813A', color: '#1A1612', fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500, padding: '12px 24px', border: 'none', cursor: 'pointer' }}>Save Session Info</button>
-                  <StatusMsg id="member" />
+                <div className={`msg-bubble ${m.role === "assistant" ? "agent" : "user"}`}>
+                  {m.content}
                 </div>
-              )}
-              {adminTab === 'deliverables' && (
-                <div>
-                  {adminDeliverables.map(d => (
-                    <div key={d.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid var(--rule)', gap: 12 }}>
-                      <div>
-                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 3 }}>{d.title}</div>
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)' }}>{d.file_type} · {d.category} · {d.display_date}{d.is_new ? ' · NEW' : ''}</div>
-                      </div>
-                      <button onClick={() => deleteItem('deliverables', d.id)} style={{ background: 'transparent', color: '#C0392B', fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 12px', border: '1px solid rgba(192,57,43,0.3)', cursor: 'pointer', flexShrink: 0 }}>Remove</button>
-                    </div>
-                  ))}
-                  <div onClick={() => setShowAddDel(!showAddDel)} style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#C8813A', cursor: 'pointer', border: '1px dashed rgba(200,129,58,0.4)', padding: '12px 20px', textAlign: 'center', marginTop: 16, display: 'block' }}>+ Add New Deliverable</div>
-                  {showAddDel && (
-                    <div style={{ background: 'var(--paper-dark)', border: '1px solid var(--rule)', padding: 24, marginTop: 12 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                        <FormField label="Title" value={newDel.title || ''} onChange={v => setNewDel(f => ({ ...f, title: v }))} />
-                        <FormField label="Type" value={newDel.file_type || ''} onChange={v => setNewDel(f => ({ ...f, file_type: v }))} />
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                        <FormField label="Category" value={newDel.category || ''} onChange={v => setNewDel(f => ({ ...f, category: v }))} />
-                        <FormField label="Display Date" value={newDel.display_date || ''} onChange={v => setNewDel(f => ({ ...f, display_date: v }))} />
-                      </div>
-                      <FormField label="Google Drive Link" value={newDel.file_url || ''} onChange={v => setNewDel(f => ({ ...f, file_url: v }))} style={{ marginBottom: 12 }} />
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-light)', marginBottom: 16, cursor: 'pointer' }}>
-                        <input type="checkbox" checked={newDel.is_new || false} onChange={e => setNewDel(f => ({ ...f, is_new: e.target.checked }))} /> Mark as New
-                      </label>
-                      <button onClick={addDeliverable} style={{ background: '#C8813A', color: '#1A1612', fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500, padding: '12px 24px', border: 'none', cursor: 'pointer' }}>Add Deliverable</button>
-                      <StatusMsg id="del" />
-                    </div>
-                  )}
+              </div>
+            ))}
+            {loading && (
+              <div className="msg-wrap">
+                <div className="msg-from agent">Circle Intelligence</div>
+                <div className="typing-wrap">
+                  <div className="t-dot"/><div className="t-dot"/><div className="t-dot"/>
                 </div>
-              )}
-              {adminTab === 'opportunities' && (
-                <div>
-                  {adminOpportunities.map(o => (
-                    <div key={o.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid var(--rule)', gap: 12 }}>
-                      <div>
-                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 3 }}>{o.title}</div>
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)' }}>{o.tag}</div>
-                      </div>
-                      <button onClick={() => deleteItem('opportunities', o.id)} style={{ background: 'transparent', color: '#C0392B', fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 12px', border: '1px solid rgba(192,57,43,0.3)', cursor: 'pointer', flexShrink: 0 }}>Remove</button>
-                    </div>
-                  ))}
-                  <div onClick={() => setShowAddOpp(!showAddOpp)} style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#C8813A', cursor: 'pointer', border: '1px dashed rgba(200,129,58,0.4)', padding: '12px 20px', textAlign: 'center', marginTop: 16, display: 'block' }}>+ Add New Opportunity</div>
-                  {showAddOpp && (
-                    <div style={{ background: 'var(--paper-dark)', border: '1px solid var(--rule)', padding: 24, marginTop: 12 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                        <FormField label="Title" value={newOpp.title || ''} onChange={v => setNewOpp(f => ({ ...f, title: v }))} />
-                        <FormField label="Tag" value={newOpp.tag || ''} onChange={v => setNewOpp(f => ({ ...f, tag: v }))} placeholder="Grant · Wellness" />
-                      </div>
-                      <FormField label="Detail" value={newOpp.detail || ''} onChange={v => setNewOpp(f => ({ ...f, detail: v }))} textarea style={{ marginBottom: 16 }} />
-                      <button onClick={addOpportunity} style={{ background: '#C8813A', color: '#1A1612', fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500, padding: '12px 24px', border: 'none', cursor: 'pointer' }}>Add Opportunity</button>
-                      <StatusMsg id="opp" />
-                    </div>
-                  )}
-                </div>
-              )}
-              {adminTab === 'messages' && (
-                <div>
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-mid)', marginBottom: 16 }}>Message Thread · {currentMember?.name || '—'}</div>
-                    <MessageThread msgs={adminMessages} memberId={currentMember?.id} isAdminView={true} />
-                  </div>
-                </div>
-              )}
-              {adminTab === 'requests' && (
-                <div>
-                  {adminRequests.map(r => (
-                    <div key={r.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid var(--rule)', gap: 12 }}>
-                      <div>
-                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 3 }}>{r.title}</div>
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)' }}>Status: {r.status}</div>
-                      </div>
-                      <button onClick={() => deleteItem('file_requests', r.id)} style={{ background: 'transparent', color: '#C0392B', fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 12px', border: '1px solid rgba(192,57,43,0.3)', cursor: 'pointer', flexShrink: 0 }}>Remove</button>
-                    </div>
-                  ))}
-                  <div onClick={() => setShowAddReq(!showAddReq)} style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#C8813A', cursor: 'pointer', border: '1px dashed rgba(200,129,58,0.4)', padding: '12px 20px', textAlign: 'center', marginTop: 16, display: 'block' }}>+ Send File Request</div>
-                  {showAddReq && (
-                    <div style={{ background: 'var(--paper-dark)', border: '1px solid var(--rule)', padding: 24, marginTop: 12 }}>
-                      <FormField label="Request Title" value={newReq.title || ''} onChange={v => setNewReq(f => ({ ...f, title: v }))} style={{ marginBottom: 16 }} />
-                      <FormField label="Instructions for Member" value={newReq.detail || ''} onChange={v => setNewReq(f => ({ ...f, detail: v }))} textarea style={{ marginBottom: 16 }} />
-                      <button onClick={addRequest} style={{ background: '#C8813A', color: '#1A1612', fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500, padding: '12px 24px', border: 'none', cursor: 'pointer' }}>Send Request</button>
-                      <StatusMsg id="req" />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+              </div>
+            )}
+            <div ref={msgsEndRef}/>
           </div>
-        </div>
-      )}
-
-      {showAddMember && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(26,22,18,0.9)', zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'var(--paper)', width: 600, maxWidth: '95vw', border: '1px solid var(--rule)', padding: 40 }}>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 24, color: 'var(--ink)', marginBottom: 24 }}>Add New Member</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-              <FormField label="Full Name" value={newMem.name || ''} onChange={v => setNewMem(f => ({ ...f, name: v }))} />
-              <FormField label="Email" value={newMem.email || ''} onChange={v => setNewMem(f => ({ ...f, email: v }))} />
+          <div className="agent-input-area">
+            <div className="input-wrap">
+              <textarea
+                className="agent-textarea"
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage();}}}
+                placeholder="Ask about your work, your opportunities, your next move..."
+                rows={1}
+              />
+              <button className="send-btn" disabled={loading||!input.trim()} onClick={() => sendMessage()}>
+                {icons.send}
+              </button>
             </div>
-            <FormField label="Temporary Password" value={newMem.password || ''} onChange={v => setNewMem(f => ({ ...f, password: v }))} style={{ marginBottom: 16 }} />
-            <FormField label="Brand / Company" value={newMem.brand || ''} onChange={v => setNewMem(f => ({ ...f, brand: v }))} style={{ marginBottom: 16 }} />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
-              <FormField label="Industry" value={newMem.industry || ''} onChange={v => setNewMem(f => ({ ...f, industry: v }))} />
-              <FormField label="Location" value={newMem.location || ''} onChange={v => setNewMem(f => ({ ...f, location: v }))} />
-            </div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button onClick={createMember} style={{ background: '#C8813A', color: '#1A1612', fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500, padding: '12px 24px', border: 'none', cursor: 'pointer' }}>Create Member</button>
-              <button onClick={() => setShowAddMember(false)} style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '12px 20px', border: '1px solid var(--rule)', background: 'transparent', color: 'var(--ink-light)', cursor: 'pointer' }}>Cancel</button>
-            </div>
-            <StatusMsg id="newmem" />
+            <div className="input-footer">Powered by Circle Intelligence · Charlie Mulan Agency</div>
           </div>
-        </div>
-      )}
-    </>
-  )
-}
-
-function NavItem({ label, active, onClick, badge }) {
-  return (
-    <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 28px', cursor: 'pointer', background: active ? 'rgba(200,129,58,0.1)' : 'transparent', borderLeft: active ? '2px solid #C8813A' : '2px solid transparent' }}>
-      <span style={{ fontSize: 11, color: active ? '#F5F0E8' : 'rgba(245,240,232,0.5)', flex: 1, fontFamily: 'DM Sans, sans-serif', fontWeight: 300 }}>{label}</span>
-      {badge && <span style={{ background: '#C8813A', color: '#1A1612', fontFamily: 'DM Mono, monospace', fontSize: 8, fontWeight: 500, padding: '2px 6px', borderRadius: 2 }}>{badge}</span>}
-    </div>
-  )
-}
-
-function DeliverableRow({ d }) {
-  const content = (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '14px 0', borderBottom: '1px solid var(--rule)' }}>
-      <div style={{ width: 36, height: 36, background: d.is_new ? 'rgba(200,129,58,0.08)' : 'var(--paper-dark)', border: `1px solid ${d.is_new ? 'rgba(200,129,58,0.25)' : 'var(--rule)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: 'DM Mono, monospace', fontSize: 8, color: d.is_new ? '#C8813A' : 'var(--ink-light)' }}>{d.file_type || 'DOC'}</div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 3 }}>{d.title}</div>
-        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: 'var(--ink-light)', letterSpacing: '0.08em' }}>{d.category} · Uploaded {d.display_date}</div>
+        </aside>
       </div>
-      {d.is_new && <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#C8813A', border: '1px solid rgba(200,129,58,0.3)', padding: '2px 7px', alignSelf: 'center' }}>New</div>}
-    </div>
-  )
-  return d.file_url ? <a href={d.file_url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{content}</a> : content
-}
-
-function OppRow({ o }) {
-  return (
-    <div style={{ padding: '16px 0', borderBottom: '1px solid var(--rule)' }}>
-      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#C8813A', marginBottom: 6 }}>{o.tag}</div>
-      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 4, lineHeight: 1.3 }}>{o.title}</div>
-      <div style={{ fontSize: 11, color: 'var(--ink-light)', lineHeight: 1.5 }}>{o.detail}</div>
-    </div>
-  )
-}
-
-function FormField({ label, value, onChange, textarea, type, placeholder, style: s }) {
-  const base = { width: '100%', background: 'var(--paper-dark)', border: '1px solid var(--rule)', color: 'var(--ink)', fontFamily: 'DM Sans, sans-serif', fontSize: 13, fontWeight: 300, padding: '10px 14px', outline: 'none', resize: textarea ? 'vertical' : undefined, minHeight: textarea ? 80 : undefined }
-  return (
-    <div style={{ marginBottom: s?.marginBottom || 0, ...s }}>
-      <label style={{ display: 'block', fontFamily: 'DM Mono, monospace', fontSize: 8, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-light)', marginBottom: 8 }}>{label}</label>
-      {textarea ? <textarea value={value} onChange={e => onChange(e.target.value)} style={base} placeholder={placeholder} /> : <input type={type || 'text'} value={value} onChange={e => onChange(e.target.value)} style={base} placeholder={placeholder} />}
-    </div>
-  )
-}
-
-function pageTitle(page) {
-  return { home: 'Member Home', 'admin-home': 'Admin Dashboard', deliverables: 'My Deliverables', opportunities: 'Opportunities', community: 'The Room', messages: 'Messages', profile: 'My Profile', submit: 'Submit Files' }[page] || ''
+    </>
+  );
 }
